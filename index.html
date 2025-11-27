@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cuenta regresiva a 16:00 (Argentina)</title>
+  <style>
+    html,body {
+      height:100%;
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(135deg,#0f172a,#0b1220);
+      color: #e6eef8;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .card {
+      text-align:center;
+      padding: 28px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+      min-width:320px;
+      max-width:720px;
+      width:90%;
+    }
+    h1 { margin:0 0 10px 0; font-size:20px; font-weight:600; }
+    .tz { font-size:12px; opacity:0.8; margin-bottom:14px; }
+    .countdown {
+      display:flex;
+      gap:12px;
+      justify-content:center;
+      align-items:center;
+      font-weight:700;
+      font-size:28px;
+      flex-wrap:wrap;
+    }
+    .unit {
+      min-width:72px;
+      padding:12px 10px;
+      border-radius:10px;
+      background: rgba(255,255,255,0.03);
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2);
+    }
+    .value { display:block; font-size:28px; }
+    .label { display:block; font-size:12px; opacity:0.8; margin-top:6px; font-weight:600; }
+    .note { margin-top:12px; font-size:13px; opacity:0.85; }
+    .past { color:#ffb4b4; font-weight:700; font-size:18px; }
+  </style>
+</head>
+<body>
+  <div class="card" role="main" aria-live="polite">
+    <h1>Tiempo restante para las 16:00 (Argentina)</h1>
+    <div class="tz">Zona horaria objetivo: <strong>America/Argentina/Mendoza</strong></div>
+
+    <div id="countdown" class="countdown" aria-atomic="true">
+      <div class="unit"><span id="days" class="value">--</span><span class="label">días</span></div>
+      <div class="unit"><span id="hours" class="value">--</span><span class="label">horas</span></div>
+      <div class="unit"><span id="minutes" class="value">--</span><span class="label">min</span></div>
+      <div class="unit"><span id="seconds" class="value">--</span><span class="label">seg</span></div>
+    </div>
+
+    <div id="message" class="note"></div>
+  </div>
+
+  <script>
+    (function () {
+      const TZ = 'America/Argentina/Mendoza'; // zona objetivo
+      const daysEl = document.getElementById('days');
+      const hoursEl = document.getElementById('hours');
+      const minutesEl = document.getElementById('minutes');
+      const secondsEl = document.getElementById('seconds');
+      const messageEl = document.getElementById('message');
+
+      // Obtiene los componentes de fecha/hora para "ahora" en la zona TZ
+      function getPartsInTimeZone(date, timeZone) {
+        const fmt = new Intl.DateTimeFormat('en-GB', {
+          timeZone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+        const parts = fmt.formatToParts(date);
+        const map = {};
+        parts.forEach(p => map[p.type] = p.value);
+        return {
+          year: Number(map.year),
+          month: Number(map.month),
+          day: Number(map.day),
+          hour: Number(map.hour),
+          minute: Number(map.minute),
+          second: Number(map.second)
+        };
+      }
+
+      // Calcula el offset en minutos entre UTC y la zona de interés para "ahora"
+      function tzOffsetMinutes(timeZone) {
+        const now = new Date();
+        const p = getPartsInTimeZone(now, timeZone);
+        // timestamp si las partes que vimos se interpretaran como UTC:
+        const utcFromParts = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+        // timestamp real de "ahora"
+        const nowTs = now.getTime();
+        // diferencia (utcFromParts - now) en minutos. Ej: para UTC-3 dará -180
+        return (utcFromParts - nowTs) / 60000;
+      }
+
+      // Construye timestamp UTC del objetivo: la fecha "hoy en TZ" a las 16:00 (hora local de TZ),
+      // devolviendo ms desde epoch (UTC)
+      function targetUtcForTodayAt16(timeZone) {
+        const now = new Date();
+        const parts = getPartsInTimeZone(now, timeZone);
+        // tz offset en minutos (puede ser negativo). Formula para obtener el instante UTC:
+        // UTC timestamp del momento en que en la zona TZ son YYYY-MM-DD 16:00
+        const tzOffMin = tzOffsetMinutes(timeZone);
+        // Date.UTC interpreta 16:00 como si fuera UTC; para obtener el UTC real restamos tzOffMin
+        const targetUtc = Date.UTC(parts.year, parts.month - 1, parts.day, 16, 0, 0) - (tzOffMin * 60000);
+        return targetUtc;
+      }
+
+      function pad(n) { return String(n).padStart(2, '0'); }
+
+      function update() {
+        const nowTs = Date.now();
+        const targetTs = targetUtcForTodayAt16(TZ);
+        let diff = targetTs - nowTs;
+
+        if (diff <= 0) {
+          // Ya pasó la 16:00 de hoy en la zona objetivo
+          daysEl.textContent = '00';
+          hoursEl.textContent = '00';
+          minutesEl.textContent = '00';
+          secondsEl.textContent = '00';
+          messageEl.innerHTML = '<span class="past">La hora 16:00 ya pasó hoy en Argentina.</span>';
+          return;
+        } else {
+          messageEl.textContent = ''; // limpiar
+        }
+
+        const totalSec = Math.floor(diff / 1000);
+        const days = Math.floor(totalSec / (3600 * 24));
+        const hours = Math.floor((totalSec % (3600 * 24)) / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        const seconds = totalSec % 60;
+
+        daysEl.textContent = pad(days);
+        hoursEl.textContent = pad(hours);
+        minutesEl.textContent = pad(minutes);
+        secondsEl.textContent = pad(seconds);
+      }
+
+      // actualizar inmediatamente y luego cada 250ms
+      update();
+      setInterval(update, 250);
+
+      // accesibilidad: describir el objetivo exacto con fecha local de la TZ
+      (function setTargetDescription() {
+        const now = new Date();
+        const parts = getPartsInTimeZone(now, TZ);
+        const desc = `Objetivo: ${parts.year}-${String(parts.month).padStart(2,'0')}-${String(parts.day).padStart(2,'0')} 16:00 (${TZ})`;
+        const el = document.querySelector('.tz');
+        el.textContent = `Zona horaria objetivo: ${TZ} — ${desc}`;
+      })();
+
+    })();
+  </script>
+</body>
+</html>
+
