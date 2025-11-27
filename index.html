@@ -1,174 +1,1194 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cuenta regresiva a 16:00 (Argentina)</title>
-  <style>
-    html,body {
-      height:100%;
-      margin:0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-      background: linear-gradient(135deg,#0f172a,#0b1220);
-      color: #e6eef8;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    .card {
-      text-align:center;
-      padding: 28px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.04);
-      box-shadow: 0 10px 30px rgba(2,6,23,0.6);
-      min-width:320px;
-      max-width:720px;
-      width:90%;
-    }
-    h1 { margin:0 0 10px 0; font-size:20px; font-weight:600; }
-    .tz { font-size:12px; opacity:0.8; margin-bottom:14px; }
-    .countdown {
-      display:flex;
-      gap:12px;
-      justify-content:center;
-      align-items:center;
-      font-weight:700;
-      font-size:28px;
-      flex-wrap:wrap;
-    }
-    .unit {
-      min-width:72px;
-      padding:12px 10px;
-      border-radius:10px;
-      background: rgba(255,255,255,0.03);
-      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2);
-    }
-    .value { display:block; font-size:28px; }
-    .label { display:block; font-size:12px; opacity:0.8; margin-top:6px; font-weight:600; }
-    .note { margin-top:12px; font-size:13px; opacity:0.85; }
-    .past { color:#ffb4b4; font-weight:700; font-size:18px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Core: OVERDRIVE</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root { --neon-blue: #0ff; --neon-pink: #f0f; --neon-green: #0f0; --neon-yellow: #ff0; --neon-red: #f00; }
+        body { margin: 0; overflow: hidden; background: #020202; color: #fff; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        canvas { display: block; }
+
+        /* UI GENERAL */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        .hud-element { position: absolute; pointer-events: none; text-shadow: 0 0 5px #000; font-weight: bold; }
+        #top-hud { top: 10px; width: 95%; display: flex; justify-content: space-between; font-size: 18px; color: var(--neon-yellow); }
+        #core-health-container { bottom: 20px; left: 50%; transform: translateX(-50%); width: 400px; text-align: center; }
+        #core-health-bar { height: 25px; border: 2px solid #fff; background: #222; padding: 2px; box-shadow: 0 0 15px var(--neon-blue); }
+        #core-health-fill { width: 100%; height: 100%; background: linear-gradient(90deg, var(--neon-blue), #fff); transition: width 0.2s; }
+
+        /* MENUS INTERACTIVOS */
+        .interactive-menu { pointer-events: auto; background: rgba(0,0,0,0.9); padding: 30px; border: 3px solid var(--neon-blue); border-radius: 15px; box-shadow: 0 0 30px var(--neon-blue), inset 0 0 20px rgba(0,255,255,0.2); text-align: center; max-width: 500px; }
+        h1 { color: var(--neon-blue); text-shadow: 0 0 15px var(--neon-blue); margin-bottom: 5px; letter-spacing: 2px; }
+        h2 { color: var(--neon-pink); margin-top:0; }
+        button { background: transparent; color: var(--neon-blue); border: 2px solid var(--neon-blue); padding: 12px 24px; font-size: 1.1rem; cursor: pointer; font-family: inherit; font-weight: bold; margin: 10px; transition: 0.2s; text-transform: uppercase; }
+        button:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 20px var(--neon-blue); }
+        input { background: #111; border: 2px solid var(--neon-blue); color: var(--neon-blue); padding: 12px; font-size: 1.1rem; width: 60%; text-align: center; font-family: inherit; margin-bottom: 10px; }
+        input::placeholder { color: rgba(0, 255, 255, 0.5); }
+        .hidden { display: none !important; }
+        #id-display { user-select: text; background: #222; padding: 5px; border: 1px dotted var(--neon-blue); word-break: break-all; font-size: 0.9em; }
+
+        /* LEVEL UP OVERLAY */
+        #levelup-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto;}
+        .upgrade-card { background: #111; border: 2px solid var(--neon-green); padding: 20px; margin: 10px; width: 300px; cursor: pointer; transition: 0.3s; text-align: left; }
+        .upgrade-card:hover { background: var(--neon-green); color: #000; box-shadow: 0 0 25px var(--neon-green); transform: scale(1.05); }
+        .upgrade-title { font-size: 1.3em; font-weight: bold; margin-bottom: 10px; display: block; }
+        .upgrade-desc { font-size: 0.9em; }
+
+        /* JOYSTICK VIRTUAL MÓVIL */
+        #mobile-joystick { position: absolute; bottom: 20px; left: 20px; width: 120px; height: 120px; background: rgba(0, 255, 255, 0.1); border: 2px solid rgba(0, 255, 255, 0.3); border-radius: 50%; display: none; pointer-events: none; z-index: 50; }
+        #mobile-joystick-knob { position: absolute; width: 50px; height: 50px; background: rgba(0, 255, 255, 0.5); border: 2px solid #0ff; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px #0ff; }
+
+    </style>
 </head>
 <body>
-  <div class="card" role="main" aria-live="polite">
-    <h1>Tiempo restante para las 16:00 (Argentina)</h1>
-    <div class="tz">Zona horaria objetivo: <strong>America/Argentina/Mendoza</strong></div>
 
-    <div id="countdown" class="countdown" aria-atomic="true">
-      <div class="unit"><span id="days" class="value">--</span><span class="label">días</span></div>
-      <div class="unit"><span id="hours" class="value">--</span><span class="label">horas</span></div>
-      <div class="unit"><span id="minutes" class="value">--</span><span class="label">min</span></div>
-      <div class="unit"><span id="seconds" class="value">--</span><span class="label">seg</span></div>
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-layer">
+    <div id="top-hud" class="hud-element hidden">
+        <div id="wave-info">OLEADA: 1</div>
+        <div id="score-info">PUNTOS: 0</div>
+        <div id="debug-info" style="font-size: 12px; color: #888;"></div>
     </div>
 
-    <div id="message" class="note"></div>
-  </div>
+    <div id="core-health-container" class="hud-element hidden">
+        <div style="margin-bottom: 5px; color: var(--neon-blue);">INTEGRIDAD DEL NÚCLEO</div>
+        <div id="core-health-bar"><div id="core-health-fill"></div></div>
+    </div>
 
-  <script>
-    (function () {
-      const TZ = 'America/Argentina/Mendoza'; // zona objetivo
-      const daysEl = document.getElementById('days');
-      const hoursEl = document.getElementById('hours');
-      const minutesEl = document.getElementById('minutes');
-      const secondsEl = document.getElementById('seconds');
-      const messageEl = document.getElementById('message');
+    <div id="main-menu" class="interactive-menu">
+        <h1>NEON CORE: OVERDRIVE</h1>
+        <p style="color: #aaa; margin-bottom: 30px;">Defensa Cooperativa Avanzada</p>
+        <button id="btnHost">HOSTEAR PARTIDA</button>
+        <div style="margin: 20px 0; display: flex; align-items: center; justify-content: center;">
+            <hr style="border-color: #333; width: 30%;"> <span style="margin: 0 10px; color: #666;">O</span> <hr style="border-color: #333; width: 30%;">
+        </div>
+        <input type="text" id="joinInput" placeholder="Pegar ID del Host aquí">
+        <button id="btnJoin">UNIRSE</button>
+    </div>
 
-      // Obtiene los componentes de fecha/hora para "ahora" en la zona TZ
-      function getPartsInTimeZone(date, timeZone) {
-        const fmt = new Intl.DateTimeFormat('en-GB', {
-          timeZone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        });
-        const parts = fmt.formatToParts(date);
-        const map = {};
-        parts.forEach(p => map[p.type] = p.value);
-        return {
-          year: Number(map.year),
-          month: Number(map.month),
-          day: Number(map.day),
-          hour: Number(map.hour),
-          minute: Number(map.minute),
-          second: Number(map.second)
+    <div id="lobby" class="interactive-menu hidden">
+        <h2>SALA DE ESPERA</h2>
+        <p id="status-msg">Conectando a la red...</p>
+        <div id="host-info" class="hidden" style="margin: 20px 0;">
+            <p>Comparte este ID con tus amigos:</p>
+            <div id="id-display">GENERANDO...</div>
+        </div>
+        <p id="players-count" style="font-size: 1.2em; color: var(--neon-green);">Jugadores listos: 1</p>
+        <button id="btnStart" class="hidden" style="width: 100%; margin: 20px 0 0 0; font-size: 1.3rem; background: var(--neon-green); color: #000;">¡DESPLEGAR!</button>
+        <p id="client-wait" class="hidden" style="color: #888; font-style: italic; margin-top: 20px;">Esperando al líder del escuadrón...</p>
+    </div>
+
+    <div id="levelup-overlay" class="hidden">
+        <h2 style="color: var(--neon-green); font-size: 3em; text-shadow: 0 0 20px var(--neon-green);">¡SUBIDA DE NIVEL!</h2>
+        <p>Elige una mejora de sistema:</p>
+        <div id="upgrade-container" style="display: flex; flex-wrap: wrap; justify-content: center;">
+            </div>
+    </div>
+
+    <!-- Joystick Virtual para Móvil -->
+    <div id="mobile-joystick">
+        <div id="mobile-joystick-knob"></div>
+    </div>
+</div>
+
+
+<script>
+// ==========================================
+// CONFIGURACIÓN Y CONSTANTES
+// ==========================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+// ✅ CORRECCIÓN 1: Colores en JavaScript (no CSS)
+const COLORS = {
+    blue: '#00ffff',
+    pink: '#ff00ff',
+    green: '#00ff00',
+    yellow: '#ffff00',
+    red: '#ff0000',
+    white: '#ffffff'
+};
+
+// ✅ CORRECCIÓN 2: AudioContext inicializado después de interacción
+let audioCtx = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+const SOUNDS = {
+    shoot: { type: 'square', freq: 350, endFreq: 100, duration: 0.1, gain: 0.05 },
+    enemyShoot: { type: 'sawtooth', freq: 200, endFreq: 50, duration: 0.15, gain: 0.05 },
+    explode: { type: 'sawtooth', freq: 150, endFreq: 10, duration: 0.4, gain: 0.15 },
+    hit: { type: 'triangle', freq: 300, endFreq: 200, duration: 0.1, gain: 0.1 },
+    levelup: { type: 'sine', freq: 400, endFreq: 800, duration: 0.5, gain: 0.1, sweep: true },
+    collect: { type: 'sine', freq: 600, endFreq: 700, duration: 0.05, gain: 0.05 }
+};
+
+function playSound(name) {
+    if (!audioCtx || audioCtx.state === 'suspended') return;
+    try {
+        const s = SOUNDS[name];
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = s.type;
+        const now = audioCtx.currentTime;
+        osc.frequency.setValueAtTime(s.freq, now);
+        if (s.sweep) osc.frequency.linearRampToValueAtTime(s.endFreq, now + s.duration);
+        else osc.frequency.exponentialRampToValueAtTime(s.endFreq, now + s.duration);
+        gain.gain.setValueAtTime(s.gain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + s.duration);
+        osc.start(now);
+        osc.stop(now + s.duration);
+    } catch(e) {
+        console.warn('Audio error:', e);
+    }
+}
+
+// ==========================================
+// RED P2P (PeerJS)
+// ==========================================
+// ✅ CORRECCIÓN 8: Límite de jugadores
+const MAX_PLAYERS = 4;
+
+let peer, conn, myId, isHost = false, gameRunning = false;
+let connections = [];
+let myPendingUpgrade = false;
+let syncCounter = 0; // ✅ CORRECCIÓN 5: Contador para sincronización optimizada
+
+// Definición de posibles mejoras
+const UPGRADES = [
+    { id: 'dmg', title: 'Munición Calibre .50', desc: '+25% Daño de proyectil' },
+    { id: 'rate', title: 'Cargador Automático', desc: '+30% Cadencia de disparo' }, // ✅ Aumentado de 20% a 30%
+    { id: 'speed', title: 'Motores de Plasma', desc: '+15% Velocidad de movimiento' },
+    { id: 'hp', title: 'Blindaje Reactivo', desc: '+30% Salud Máxima y cura completa' },
+    { id: 'bulletSpeed', title: 'Acelerador Magnético', desc: '+30% Velocidad de proyectil' }
+];
+
+// Estado del Juego (Host es la autoridad)
+let gameState = {
+    players: {},
+    enemies: [],
+    bullets: [],
+    enemyBullets: [],
+    obstacles: [],
+    pickups: [],
+    mines: [],
+    coreHealth: 200, maxCoreHealth: 200,
+    score: 0, wave: 1,
+    gameTime: 0
+};
+
+// Input local
+const keys = {};
+const mouse = { x: 0, y: 0, down: false };
+
+// ✅ CORRECCIÓN 6: Joystick móvil mejorado
+let touchJoystick = {
+    active: false,
+    startX: 0, startY: 0,
+    currentX: 0, currentY: 0,
+    touchId: null
+};
+let touchFire = { active: false, touchId: null };
+
+// ==========================================
+// LÓGICA DE UI Y EVENTOS
+// ==========================================
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize); resize();
+
+document.getElementById('btnHost').onclick = () => {
+    initAudio(); // ✅ Iniciar audio con interacción
+    initPeer(true);
+};
+
+document.getElementById('btnJoin').onclick = () => {
+    initAudio(); // ✅ Iniciar audio con interacción
+    const id = document.getElementById('joinInput').value.trim();
+    if(id) initPeer(false, id);
+};
+
+document.getElementById('btnStart').onclick = () => {
+    if(isHost && !gameRunning) {
+        startGameHost();
+    }
+};
+
+function showScreen(id) {
+    ['main-menu', 'lobby', 'top-hud', 'core-health-container'].forEach(el => document.getElementById(el).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+}
+
+function updateHUD() {
+    document.getElementById('wave-info').innerText = `OLEADA: ${gameState.wave}`;
+    document.getElementById('score-info').innerText = `PUNTOS: ${gameState.score}`;
+    const hpPercent = Math.max(0, (gameState.coreHealth / gameState.maxCoreHealth) * 100);
+    document.getElementById('core-health-fill').style.width = hpPercent + '%';
+    document.getElementById('core-health-fill').style.background = hpPercent > 50 ? 'linear-gradient(90deg, #00ffff, #fff)' : hpPercent > 25 ? 'linear-gradient(90deg, #ffff00, #fff)' : 'linear-gradient(90deg, #ff0000, #fff)';
+
+    // Debug: Mostrar estado de inputs
+    const debugKeys = Object.keys(keys).filter(k => keys[k]).join(',') || 'ninguna';
+    document.getElementById('debug-info').innerText = `Teclas: ${debugKeys} | Mouse: ${mouse.down ? 'CLICK' : 'suelto'}`;
+}
+
+// Muestra el menú de nivel para el cliente
+function showLevelUpMenu(options) {
+    const container = document.getElementById('upgrade-container');
+    container.innerHTML = '';
+    myPendingUpgrade = true;
+
+    options.forEach(optId => {
+        const upgradeData = UPGRADES.find(u => u.id === optId);
+        const card = document.createElement('div');
+        card.className = 'upgrade-card';
+        card.innerHTML = `<span class="upgrade-title">${upgradeData.title}</span><span class="upgrade-desc">${upgradeData.desc}</span>`;
+        card.onclick = () => {
+            document.getElementById('levelup-overlay').classList.add('hidden');
+            myPendingUpgrade = false;
+            const msg = { type: 'PICK_UPGRADE', upgradeId: optId };
+            if (isHost) handleUpgradePick(myId, optId);
+            else if (conn && conn.open) conn.send(msg);
         };
-      }
+        container.appendChild(card);
+    });
+    document.getElementById('levelup-overlay').classList.remove('hidden');
+    playSound('levelup');
+}
 
-      // Calcula el offset en minutos entre UTC y la zona de interés para "ahora"
-      function tzOffsetMinutes(timeZone) {
-        const now = new Date();
-        const p = getPartsInTimeZone(now, timeZone);
-        // timestamp si las partes que vimos se interpretaran como UTC:
-        const utcFromParts = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
-        // timestamp real de "ahora"
-        const nowTs = now.getTime();
-        // diferencia (utcFromParts - now) en minutos. Ej: para UTC-3 dará -180
-        return (utcFromParts - nowTs) / 60000;
-      }
+// ✅ CORRECCIÓN 11: Mensaje visual de oleada
+function showWaveMessage(msg) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-size: 4em; color: ${COLORS.green}; pointer-events: none;
+        text-shadow: 0 0 30px ${COLORS.green}; z-index: 999;
+        font-family: 'Courier New', Courier, monospace; font-weight: bold;
+    `;
+    overlay.innerText = msg;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 2000);
+}
 
-      // Construye timestamp UTC del objetivo: la fecha "hoy en TZ" a las 16:00 (hora local de TZ),
-      // devolviendo ms desde epoch (UTC)
-      function targetUtcForTodayAt16(timeZone) {
-        const now = new Date();
-        const parts = getPartsInTimeZone(now, timeZone);
-        // tz offset en minutos (puede ser negativo). Formula para obtener el instante UTC:
-        // UTC timestamp del momento en que en la zona TZ son YYYY-MM-DD 16:00
-        const tzOffMin = tzOffsetMinutes(timeZone);
-        // Date.UTC interpreta 16:00 como si fuera UTC; para obtener el UTC real restamos tzOffMin
-        const targetUtc = Date.UTC(parts.year, parts.month - 1, parts.day, 16, 0, 0) - (tzOffMin * 60000);
-        return targetUtc;
-      }
 
-      function pad(n) { return String(n).padStart(2, '0'); }
+// ==========================================
+// INICIALIZACIÓN DE RED
+// ==========================================
+function initPeer(host, idToJoin = null) {
+    isHost = host;
+    document.getElementById('status-msg').innerText = "Iniciando nodo cuántico...";
+    peer = new Peer(null, { debug: 1 });
 
-      function update() {
-        const nowTs = Date.now();
-        const targetTs = targetUtcForTodayAt16(TZ);
-        let diff = targetTs - nowTs;
+    peer.on('open', (id) => {
+        myId = id;
+        showScreen('lobby');
+        document.getElementById('status-msg').innerText = isHost ? "Nodo Establecido. Esperando unidades." : "Conectado al Host.";
 
-        if (diff <= 0) {
-          // Ya pasó la 16:00 de hoy en la zona objetivo
-          daysEl.textContent = '00';
-          hoursEl.textContent = '00';
-          minutesEl.textContent = '00';
-          secondsEl.textContent = '00';
-          messageEl.innerHTML = '<span class="past">La hora 16:00 ya pasó hoy en Argentina.</span>';
-          return;
+        if (isHost) {
+            document.getElementById('host-info').classList.remove('hidden');
+            document.getElementById('id-display').innerText = id;
+            document.getElementById('btnStart').classList.remove('hidden');
+            gameState.players[myId] = createPlayer(myId, true);
+            updateLobbyCount();
         } else {
-          messageEl.textContent = ''; // limpiar
+            document.getElementById('client-wait').classList.remove('hidden');
+            connectToHost(idToJoin);
+        }
+    });
+
+    peer.on('connection', (c) => {
+        if (isHost) {
+            // ✅ CORRECCIÓN 8: Verificar límite de jugadores
+            if (Object.keys(gameState.players).length >= MAX_PLAYERS) {
+                c.send({ type: 'ERROR', msg: 'Sala llena (máximo ' + MAX_PLAYERS + ' jugadores)' });
+                setTimeout(() => c.close(), 100);
+                return;
+            }
+
+            connections.push(c);
+            c.on('open', () => {
+                gameState.players[c.peer] = createPlayer(c.peer, false);
+                updateLobbyCount();
+                broadcast({ type: 'LOBBY_UPDATE', count: Object.keys(gameState.players).length });
+
+                c.on('data', (data) => handleClientData(c.peer, data));
+
+                // ✅ CORRECCIÓN 4: Manejo mejorado de desconexiones
+                c.on('close', () => {
+                    if (gameRunning) {
+                        console.log('Jugador desconectado:', c.peer);
+                        broadcast({ type: 'PLAYER_LEFT', playerId: c.peer });
+                    }
+                    delete gameState.players[c.peer];
+                    connections = connections.filter(conn => conn.peer !== c.peer);
+                    updateLobbyCount();
+                    broadcast({ type: 'LOBBY_UPDATE', count: Object.keys(gameState.players).length });
+                });
+            });
+        }
+    });
+    peer.on('error', err => alert("Error de Red: " + err.type));
+}
+
+function connectToHost(hostId) {
+    conn = peer.connect(hostId);
+    conn.on('open', () => {
+        document.getElementById('status-msg').innerText = "¡Conexión exitosa!";
+        conn.on('data', handleHostData);
+    });
+    conn.on('error', () => alert("No se pudo conectar al Host."));
+}
+
+function updateLobbyCount() {
+    document.getElementById('players-count').innerText = `Jugadores listos: ${Object.keys(gameState.players).length}`;
+}
+
+// --- MANEJO DE DATOS DE RED ---
+
+// ✅ CORRECCIÓN 9: Validación de datos de red
+function handleClientData(playerId, data) {
+    if (!data || !data.type) return;
+
+    if (data.type === 'INPUT') {
+        const p = gameState.players[playerId];
+        if (!p) return;
+
+        if (typeof data.keys === 'object' && data.keys !== null) {
+            p.keys = data.keys;
         }
 
-        const totalSec = Math.floor(diff / 1000);
-        const days = Math.floor(totalSec / (3600 * 24));
-        const hours = Math.floor((totalSec % (3600 * 24)) / 3600);
-        const minutes = Math.floor((totalSec % 3600) / 60);
-        const seconds = totalSec % 60;
+        if (typeof data.angle === 'number' && !isNaN(data.angle)) {
+            p.aimAngle = data.angle;
+        }
 
-        daysEl.textContent = pad(days);
-        hoursEl.textContent = pad(hours);
-        minutesEl.textContent = pad(minutes);
-        secondsEl.textContent = pad(seconds);
-      }
+        p.isShooting = Boolean(data.click);
+    } else if (data.type === 'PICK_UPGRADE') {
+        if (data.upgradeId) {
+            handleUpgradePick(playerId, data.upgradeId);
+        }
+    }
+}
 
-      // actualizar inmediatamente y luego cada 250ms
-      update();
-      setInterval(update, 250);
+// CLIENTE recibe datos del Host
+function handleHostData(data) {
+    if (!data || !data.type) return;
 
-      // accesibilidad: describir el objetivo exacto con fecha local de la TZ
-      (function setTargetDescription() {
-        const now = new Date();
-        const parts = getPartsInTimeZone(now, TZ);
-        const desc = `Objetivo: ${parts.year}-${String(parts.month).padStart(2,'0')}-${String(parts.day).padStart(2,'0')} 16:00 (${TZ})`;
-        const el = document.querySelector('.tz');
-        el.textContent = `Zona horaria objetivo: ${TZ} — ${desc}`;
-      })();
+    if (data.type === 'UPDATE') {
+        gameState = data.state;
+        if (!gameRunning) startGameClient();
+    } else if (data.type === 'LOBBY_UPDATE') {
+        document.getElementById('players-count').innerText = `Jugadores listos: ${data.count}`;
+    } else if (data.type === 'LEVEL_UP_OPTIONS') {
+        if (data.options && Array.isArray(data.options)) {
+            showLevelUpMenu(data.options);
+        }
+    } else if (data.type === 'WAVE_START') {
+        showWaveMessage(data.msg);
+        playSound('levelup');
+    } else if (data.type === 'GAME_OVER') {
+        alert("MISIÓN FALLIDA. El Núcleo ha sido destruido.\nScore Final: " + data.score);
+        location.reload();
+    } else if (data.type === 'ERROR') {
+        alert(data.msg);
+        location.reload();
+    } else if (data.type === 'PLAYER_LEFT') {
+        console.log('Jugador abandonó la partida:', data.playerId);
+    }
+}
 
-    })();
-  </script>
+function broadcast(msg) {
+    connections.forEach(c => { if(c && c.open) c.send(msg); });
+}
+
+// ==========================================
+// LÓGICA DEL JUEGO (Entidades y Físicas)
+// ==========================================
+
+function createPlayer(id, isCap) {
+    const colors = [COLORS.blue, COLORS.pink, COLORS.green, COLORS.yellow];
+    const shortId = id.substring(0, 4).toUpperCase();
+    return {
+        id: id, shortId: shortId,
+        x: width/2 + Math.cos(Object.keys(gameState.players).length) * 100,
+        y: height/2 + Math.sin(Object.keys(gameState.players).length) * 100,
+        angle: 0, aimAngle: 0,
+        color: isCap ? colors[0] : colors[Object.keys(gameState.players).length % colors.length],
+        hp: 100, maxHp: 100,
+        exp: 0, level: 1, expToNext: 50,
+        speed: 4, fireRate: 30, damage: 20, bulletSpeed: 15, // ✅ fireRate: 30 frames (disparo lento inicial ~2/seg)
+        cooldown: 0, keys: {}, isShooting: false, needsUpgrade: false,
+        respawnTimer: 0
+    };
+}
+
+function spawnObstacles() {
+    // ✅ Aumentado de 15 a 20 obstáculos para más cobertura táctica
+    for(let i=0; i<20; i++) {
+        const size = 40 + Math.random() * 60;
+        const x = Math.random() * (width - size);
+        const y = Math.random() * (height - size);
+        // No spawnear cerca del núcleo (zona segura)
+        if (Math.hypot(x + size/2 - width/2, y + size/2 - height/2) < 250) continue;
+        gameState.obstacles.push({
+            x, y, w: size, h: size, hp: 200, maxHp: 200, type: 'crate'
+        });
+    }
+    console.log('🧱 Obstáculos generados:', gameState.obstacles.length, '- ¡Úsalos como cobertura!');
+}
+
+function startGameHost() {
+    gameRunning = true;
+    spawnObstacles();
+    broadcast({ type: 'UPDATE', state: gameState });
+    startGameUI();
+    console.log('🎮 Juego iniciado como HOST. Jugadores:', Object.keys(gameState.players).length);
+    console.log('💡 Usa WASD para moverte y mouse para apuntar/disparar');
+    requestAnimationFrame(gameLoopHost);
+}
+
+function startGameClient() {
+    gameRunning = true;
+    startGameUI();
+    // Mostrar joystick en móviles
+    if ('ontouchstart' in window) {
+        document.getElementById('mobile-joystick').style.display = 'block';
+    }
+    console.log('🎮 Juego iniciado como CLIENTE');
+    console.log('💡 Usa WASD para moverte y mouse para apuntar/disparar');
+    requestAnimationFrame(gameLoopClient);
+}
+
+function startGameUI() {
+    ['lobby', 'main-menu'].forEach(el => document.getElementById(el).classList.add('hidden'));
+    ['top-hud', 'core-health-container'].forEach(el => document.getElementById(el).classList.remove('hidden'));
+    resize();
+}
+
+// ✅ CORRECCIÓN 10: Función de culling
+function isOnScreen(x, y, margin = 100) {
+    return x > -margin && x < width + margin &&
+           y > -margin && y < height + margin;
+}
+
+
+// --- BUCLE PRINCIPAL HOST (Físicas y Lógica) ---
+function gameLoopHost() {
+    if (gameState.coreHealth <= 0) {
+        broadcast({ type: 'GAME_OVER', score: gameState.score });
+        alert("GAME OVER - Host");
+        location.reload(); return;
+    }
+
+    gameState.gameTime++;
+
+    // ✅ APLICAR INPUT DEL HOST (jugador local)
+    const myPlayer = gameState.players[myId];
+    if (myPlayer && !myPendingUpgrade) {
+        myPlayer.keys = {...keys}; // Copiar keys actuales
+        myPlayer.aimAngle = Math.atan2(mouse.y - myPlayer.y, mouse.x - myPlayer.x);
+        myPlayer.isShooting = mouse.down;
+    }
+
+    // ✅ Spawn rate reducido al inicio (0.008 en vez de 0.015)
+    const spawnChance = 0.008 + (gameState.wave * 0.005); // Crece más rápido con oleadas
+    if (Math.random() < spawnChance) spawnEnemy();
+
+    // Actualizar Jugadores
+    for (let id in gameState.players) {
+        const p = gameState.players[id];
+
+        // ✅ CORRECCIÓN 3: Sistema de respawn sincronizado
+        if (p.hp <= 0) {
+            if (p.respawnTimer > 0) {
+                p.respawnTimer--;
+                if (p.respawnTimer === 0) {
+                    p.hp = p.maxHp;
+                    p.x = width/2;
+                    p.y = height/2;
+                }
+            }
+            continue;
+        }
+
+        // Movimiento
+        let dx = 0, dy = 0;
+        if (p.keys['w']) dy -= 1; if (p.keys['s']) dy += 1;
+        if (p.keys['a']) dx -= 1; if (p.keys['d']) dx += 1;
+
+        if (dx !== 0 || dy !== 0) {
+            const moveAngle = Math.atan2(dy, dx);
+            p.x += Math.cos(moveAngle) * p.speed;
+            p.y += Math.sin(moveAngle) * p.speed;
+            p.angle = moveAngle;
+        }
+
+        // Colisión Jugador-Obstáculo
+        gameState.obstacles.forEach(o => {
+            if (p.x > o.x && p.x < o.x + o.w && p.y > o.y && p.y < o.y + o.h) {
+                p.x -= Math.cos(p.angle) * p.speed;
+                p.y -= Math.sin(p.angle) * p.speed;
+            }
+        });
+
+        p.x = Math.max(20, Math.min(width-20, p.x));
+        p.y = Math.max(20, Math.min(height-20, p.y));
+
+        // Disparo
+        if (p.isShooting && p.cooldown <= 0 && !p.needsUpgrade) {
+            gameState.bullets.push({
+                x: p.x + Math.cos(p.aimAngle)*20,
+                y: p.y + Math.sin(p.aimAngle)*20,
+                vx: Math.cos(p.aimAngle) * p.bulletSpeed,
+                vy: Math.sin(p.aimAngle) * p.bulletSpeed,
+                dmg: p.damage, color: p.color, life: 80
+            });
+            p.cooldown = p.fireRate;
+            playSound('shoot');
+        }
+        if (p.cooldown > 0) p.cooldown--;
+
+        // Recoger EXP
+        for (let i = gameState.pickups.length - 1; i >= 0; i--) {
+            const pickup = gameState.pickups[i];
+            if (Math.hypot(p.x - pickup.x, p.y - pickup.y) < 30) {
+                p.exp += pickup.val;
+                gameState.pickups.splice(i, 1);
+                playSound('collect');
+                checkLevelUp(p);
+            }
+        }
+    }
+
+    updateBullets(gameState.bullets, true);
+    updateBullets(gameState.enemyBullets, false);
+    updateEnemies();
+    updateMinesAndObstacles();
+
+    // ✅ CORRECCIÓN 5: Sincronización optimizada (cada 3 frames)
+    syncCounter++;
+    if (syncCounter % 3 === 0) {
+        broadcast({ type: 'UPDATE', state: gameState });
+    }
+
+    render();
+    requestAnimationFrame(gameLoopHost);
+}
+
+// --- BUCLE CLIENTE ---
+function gameLoopClient() {
+    if (!myPendingUpgrade) {
+        // ✅ CALCULAR ÁNGULO RESPECTO AL JUGADOR (no al centro de pantalla)
+        const myPlayer = gameState.players[myId];
+        let aimAngle = 0;
+        if (myPlayer) {
+            aimAngle = Math.atan2(mouse.y - myPlayer.y, mouse.x - myPlayer.x);
+        }
+
+        const inputData = {
+            type: 'INPUT',
+            keys: keys,
+            angle: aimAngle,
+            click: mouse.down
+        };
+        if (conn && conn.open) conn.send(inputData);
+    }
+
+    render();
+    if (gameRunning) requestAnimationFrame(gameLoopClient);
+}
+
+
+// ==========================================
+// LÓGICA AUXILIAR DEL HOST
+// ==========================================
+
+function spawnEnemy() {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.max(width, height) / 1.3;
+    const x = width/2 + Math.cos(angle) * dist;
+    const y = height/2 + Math.sin(angle) * dist;
+    const typeRoll = Math.random();
+
+    // ✅ Velocidades base REDUCIDAS para balancear con cadencia de disparo lenta
+    let type = 'chaser'; let hp = 30; let speed = 1.2; let color = COLORS.red; // Reducido de 2.5 a 1.2
+    if (gameState.wave > 2 && typeRoll > 0.7) {
+        type = 'shooter'; hp = 50; speed = 0.8; color = COLORS.yellow; // Reducido de 1.5 a 0.8
+    }
+    else if (gameState.wave > 4 && typeRoll > 0.85) {
+        type = 'bomber'; hp = 80; speed = 0.6; color = COLORS.pink; // Reducido de 1.0 a 0.6
+    }
+
+    // ✅ Escalado progresivo aumentado para compensar inicio lento
+    hp *= (1 + gameState.wave * 0.2); // Aumentado de 0.15 a 0.2
+    speed *= (1 + gameState.wave * 0.08); // Aumentado de 0.05 a 0.08
+
+    gameState.enemies.push({ x, y, type, hp, maxHp: hp, speed, color, angle: 0, cooldown: 100 + Math.random()*100 });
+}
+
+function updateBullets(arr, isPlayerBullet) {
+    for (let i = arr.length - 1; i >= 0; i--) {
+        const b = arr[i];
+        b.x += b.vx; b.y += b.vy;
+        b.life--;
+        if (b.life <= 0) { arr.splice(i, 1); continue; }
+
+        let hit = false;
+        if (isPlayerBullet) {
+            for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                const e = gameState.enemies[j];
+                if (Math.hypot(e.x - b.x, e.y - b.y) < 25) {
+                    damageEnemy(e, b.dmg, j); hit = true; break;
+                }
+            }
+            if (!hit) {
+                for (let k = gameState.obstacles.length - 1; k >= 0; k--) {
+                    const o = gameState.obstacles[k];
+                    if (b.x > o.x && b.x < o.x + o.w && b.y > o.y && b.y < o.y + o.h) {
+                        o.hp -= b.dmg; hit = true;
+                        if (o.hp <= 0) gameState.obstacles.splice(k, 1);
+                        playSound('hit'); break;
+                    }
+                }
+            }
+        } else {
+            // Balas enemigas vs Jugadores
+            for (let id in gameState.players) {
+                const p = gameState.players[id];
+                if (p.hp > 0 && Math.hypot(p.x - b.x, p.y - b.y) < 20) {
+                    damagePlayer(p, b.dmg); hit = true; break;
+                }
+            }
+            // ✅ Balas enemigas vs Obstáculos (cobertura táctica)
+            if (!hit) {
+                for (let k = gameState.obstacles.length - 1; k >= 0; k--) {
+                    const o = gameState.obstacles[k];
+                    if (b.x > o.x && b.x < o.x + o.w && b.y > o.y && b.y < o.y + o.h) {
+                        o.hp -= b.dmg; hit = true;
+                        if (o.hp <= 0) gameState.obstacles.splice(k, 1);
+                        playSound('hit'); break;
+                    }
+                }
+            }
+            // vs Núcleo
+            if (!hit && Math.hypot(width/2 - b.x, height/2 - b.y) < 40) {
+                gameState.coreHealth -= b.dmg; hit = true; playSound('explode');
+            }
+        }
+
+        if (hit || b.x < -50 || b.x > width+50 || b.y < -50 || b.y > height+50) arr.splice(i, 1);
+    }
+}
+
+function updateEnemies() {
+    for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+        const e = gameState.enemies[i];
+        const dxCore = (width/2) - e.x;
+        const dyCore = (height/2) - e.y;
+        const distCore = Math.sqrt(dxCore*dxCore + dyCore*dyCore);
+        e.angle = Math.atan2(dyCore, dxCore);
+
+        // Guardar posición anterior para colisiones
+        const oldX = e.x;
+        const oldY = e.y;
+
+        if (e.type === 'chaser' || e.type === 'bomber') {
+             e.x += Math.cos(e.angle) * e.speed;
+             e.y += Math.sin(e.angle) * e.speed;
+        } else if (e.type === 'shooter') {
+            if (distCore > 300) {
+                e.x += Math.cos(e.angle) * e.speed;
+                e.y += Math.sin(e.angle) * e.speed;
+            }
+        }
+
+        // ✅ COLISIÓN ENEMIGO-OBSTÁCULO
+        let collided = false;
+        for (let j = 0; j < gameState.obstacles.length; j++) {
+            const o = gameState.obstacles[j];
+            // Verificar si el enemigo está dentro del obstáculo (con margen de 25px del radio del enemigo)
+            if (e.x + 25 > o.x && e.x - 25 < o.x + o.w &&
+                e.y + 25 > o.y && e.y - 25 < o.y + o.h) {
+                collided = true;
+                // Retroceder a posición anterior
+                e.x = oldX;
+                e.y = oldY;
+
+                // Intentar rodear: agregar un ángulo perpendicular para esquivar
+                const avoidAngle = e.angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+                e.x += Math.cos(avoidAngle) * e.speed;
+                e.y += Math.sin(avoidAngle) * e.speed;
+                break;
+            }
+        }
+
+        // Si después de esquivar sigue colisionando, simplemente retroceder
+        if (collided) {
+            for (let j = 0; j < gameState.obstacles.length; j++) {
+                const o = gameState.obstacles[j];
+                if (e.x + 25 > o.x && e.x - 25 < o.x + o.w &&
+                    e.y + 25 > o.y && e.y - 25 < o.y + o.h) {
+                    e.x = oldX;
+                    e.y = oldY;
+                    break;
+                }
+            }
+        }
+
+        // Lógica de disparo para shooters
+        if (e.type === 'shooter') {
+            if (e.cooldown <= 0) {
+                let nearest = null; let minD = 9999;
+                for(let id in gameState.players) {
+                    const p = gameState.players[id];
+                    if (p.hp <= 0) continue;
+                    const d = Math.hypot(p.x - e.x, p.y - e.y);
+                    if(d < minD) { minD = d; nearest = p; }
+                }
+                if(nearest && minD < 500) {
+                    const aim = Math.atan2(nearest.y - e.y, nearest.x - e.x);
+                    // ✅ Velocidad de balas enemigas escalada con oleadas (más lento al inicio)
+                    const bulletSpeed = 4 + (gameState.wave * 0.3); // Inicia en 4, crece gradualmente
+                    gameState.enemyBullets.push({
+                        x:e.x, y:e.y,
+                        vx:Math.cos(aim)*bulletSpeed,
+                        vy:Math.sin(aim)*bulletSpeed,
+                        dmg:15, life:60, color: e.color
+                    });
+                    e.cooldown = 180; // ✅ Aumentado de 150 a 180 (disparan más lento)
+                    playSound('enemyShoot');
+                }
+            }
+            if (e.cooldown > 0) e.cooldown--;
+        }
+
+        if (distCore < 50) {
+            gameState.coreHealth -= (e.type === 'bomber' ? 50 : 20);
+            playSound('explode');
+            killEnemy(e, i, false);
+        }
+    }
+}
+
+function updateMinesAndObstacles() {
+    for (let i = gameState.mines.length - 1; i >= 0; i--) {
+        const m = gameState.mines[i];
+        m.timer--;
+        if (m.timer <= 0) {
+            playSound('explode');
+            gameState.enemies.forEach((e, idx) => {
+                if (Math.hypot(e.x - m.x, e.y - m.y) < m.radius) damageEnemy(e, m.dmg, idx);
+            });
+            gameState.obstacles.forEach((o, idx) => {
+                if (Math.hypot(o.x+o.w/2 - m.x, o.y+o.h/2 - m.y) < m.radius) o.hp -= m.dmg;
+            });
+             for(let id in gameState.players) {
+                 const p = gameState.players[id];
+                 if (p.hp > 0 && Math.hypot(p.x - m.x, p.y - m.y) < m.radius) {
+                     damagePlayer(p, m.dmg/2);
+                 }
+             }
+            gameState.mines.splice(i, 1);
+        }
+    }
+    gameState.obstacles = gameState.obstacles.filter(o => o.hp > 0);
+}
+
+
+function damageEnemy(e, dmg, index) {
+    e.hp -= dmg;
+    playSound('hit');
+    if (e.hp <= 0) killEnemy(e, index, true);
+}
+
+function killEnemy(e, index, dropLoot) {
+    if (dropLoot) {
+        gameState.score += e.type === 'bomber' ? 30 : 10;
+        const expVal = e.type === 'bomber' ? 25 : e.type === 'shooter' ? 15 : 10;
+        gameState.pickups.push({x: e.x, y: e.y, val: expVal, timer: 500});
+        if (e.type === 'bomber') {
+            gameState.mines.push({x:e.x, y:e.y, timer: 120, radius: 150, dmg: 100});
+        }
+        playSound('explode');
+
+        // ✅ CORRECCIÓN 11: Nueva oleada con mensaje
+        if(gameState.score % 200 === 0) {
+            gameState.wave++;
+            broadcast({
+                type: 'WAVE_START',
+                wave: gameState.wave,
+                msg: `¡OLEADA ${gameState.wave}!`
+            });
+            if (isHost) showWaveMessage(`¡OLEADA ${gameState.wave}!`);
+        }
+    }
+    gameState.enemies.splice(index, 1);
+}
+
+function damagePlayer(p, dmg) {
+    p.hp = Math.max(0, p.hp - dmg);
+    playSound('hit');
+
+    // ✅ CORRECCIÓN 3: Respawn sincronizado
+    if (p.hp <= 0 && p.respawnTimer === 0) {
+        gameState.score = Math.max(0, gameState.score - 50);
+        p.respawnTimer = 300; // 5 segundos a 60fps
+        playSound('explode');
+    }
+}
+
+// --- SISTEMA RPG ---
+function checkLevelUp(p) {
+    if (p.exp >= p.expToNext) {
+        p.level++;
+        p.exp -= p.expToNext;
+        p.expToNext = Math.floor(p.expToNext * 1.5);
+        p.needsUpgrade = true;
+
+        const options = [...UPGRADES].sort(() => 0.5 - Math.random()).slice(0, 3).map(u => u.id);
+
+        const msg = { type: 'LEVEL_UP_OPTIONS', options: options };
+        if (p.id === myId) showLevelUpMenu(options);
+        else sendTo(p.id, msg);
+    }
+}
+
+function handleUpgradePick(playerId, upgradeId) {
+    const p = gameState.players[playerId];
+    if (!p) return;
+
+    switch(upgradeId) {
+        case 'dmg': p.damage *= 1.25; break;
+        case 'rate': p.fireRate = Math.max(5, p.fireRate * 0.7); break; // ✅ 30% reducción (0.7), límite mínimo 5 frames
+        case 'speed': p.speed *= 1.15; break;
+        case 'hp': p.maxHp *= 1.3; p.hp = p.maxHp; break;
+        case 'bulletSpeed': p.bulletSpeed *= 1.3; break;
+    }
+    p.needsUpgrade = false;
+    if (playerId === myId) {
+        myPendingUpgrade = false;
+        document.getElementById('levelup-overlay').classList.add('hidden');
+    }
+}
+
+function sendTo(peerId, msg) {
+    const conn = connections.find(c => c.peer === peerId);
+    if (conn && conn.open) conn.send(msg);
+}
+
+
+// ==========================================
+// RENDERIZADO (Común)
+// ==========================================
+function render() {
+    ctx.fillStyle = '#020202';
+    ctx.fillRect(0, 0, width, height);
+
+    // Dibujar Obstáculos
+    ctx.shadowBlur = 15;
+    gameState.obstacles.forEach(o => {
+        if (!isOnScreen(o.x, o.y)) return; // ✅ CORRECCIÓN 10: Culling
+
+        ctx.shadowColor = COLORS.blue;
+        ctx.strokeStyle = COLORS.blue;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeRect(o.x, o.y, o.w, o.h);
+        if(o.hp < o.maxHp) drawBar(o.x, o.y - 10, o.w, 5, o.hp, o.maxHp, COLORS.blue);
+    });
+
+    // Dibujar Minas
+    gameState.mines.forEach(m => {
+        if (!isOnScreen(m.x, m.y)) return;
+
+        ctx.shadowColor = COLORS.pink;
+        ctx.fillStyle = COLORS.pink;
+        const pulse = 10 + Math.sin(gameState.gameTime/5) * 5;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, pulse, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,0,255,0.3)';
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.radius, 0, Math.PI*2);
+        ctx.stroke();
+    });
+
+    // Dibujar Pickups
+    ctx.shadowBlur = 10;
+    gameState.pickups.forEach(p => {
+        if (!isOnScreen(p.x, p.y)) return;
+
+        ctx.shadowColor = COLORS.green;
+        ctx.fillStyle = COLORS.green;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI*2);
+        ctx.fill();
+    });
+
+    // Dibujar Núcleo
+    const corePulse = 35 + Math.sin(gameState.gameTime/30)*5;
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = COLORS.blue;
+    ctx.fillStyle = COLORS.white;
+    ctx.beginPath();
+    ctx.arc(width/2, height/2, corePulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.blue;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(width/2, height/2, 50, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Dibujar Enemigos
+    gameState.enemies.forEach(e => {
+        if (!isOnScreen(e.x, e.y)) return; // ✅ CORRECCIÓN 10: Culling
+
+        ctx.shadowColor = e.color;
+        ctx.fillStyle = e.color;
+        ctx.strokeStyle = e.color;
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.rotate(e.angle);
+
+        if(e.type === 'chaser') {
+            ctx.beginPath();
+            ctx.moveTo(20,0);
+            ctx.lineTo(-15, 15);
+            ctx.lineTo(-5,0);
+            ctx.lineTo(-15,-15);
+            ctx.fill();
+        } else if(e.type === 'shooter') {
+             ctx.beginPath();
+             ctx.moveTo(20,0);
+             ctx.lineTo(0, 20);
+             ctx.lineTo(-20,0);
+             ctx.lineTo(0,-20);
+             ctx.closePath();
+             ctx.stroke();
+             ctx.fill();
+        } else if (e.type === 'bomber') {
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for(let i=0;i<6;i++) {
+                ctx.lineTo(25 * Math.cos(i*Math.PI/3), 25 * Math.sin(i*Math.PI/3));
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+        ctx.restore();
+        drawBar(e.x - 20, e.y - 35, 40, 4, e.hp, e.maxHp, e.color);
+    });
+
+    // Dibujar Jugadores
+    for (let id in gameState.players) {
+        const p = gameState.players[id];
+
+        // ✅ CORRECCIÓN 3: Mostrar contador de respawn
+        if(p.hp <= 0) {
+            if (p.respawnTimer > 0) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = p.color;
+                ctx.fillStyle = p.color;
+                ctx.font = "bold 20px 'Courier New'";
+                ctx.textAlign = "center";
+                ctx.fillText(`RESPAWN: ${Math.ceil(p.respawnTimer/60)}s`, p.x, p.y);
+            }
+            continue;
+        }
+
+        ctx.shadowColor = p.color;
+        ctx.strokeStyle = p.color;
+        ctx.fillStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = p.color;
+        ctx.textAlign = "center";
+        ctx.font = "bold 14px 'Courier New'";
+        ctx.fillText(`[LV.${p.level}] ${p.shortId}`, 0, -45);
+
+        drawBar(-25, -35, 50, 6, p.hp, p.maxHp, p.color);
+        drawBar(-25, -28, 50, 3, p.exp, p.expToNext, COLORS.yellow);
+
+        // ✅ CORRECCIÓN 7: Indicador visual de level-up
+        if (p.needsUpgrade && id !== myId) {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = COLORS.green;
+            ctx.strokeStyle = COLORS.green;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, 40 + Math.sin(gameState.gameTime/10)*5, 0, Math.PI*2);
+            ctx.stroke();
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = COLORS.green;
+            ctx.font = "bold 12px 'Courier New'";
+            ctx.fillText("LEVEL UP!", 0, -60);
+        }
+
+        ctx.save();
+        ctx.rotate(p.angle);
+        ctx.shadowBlur = 15;
+        ctx.strokeRect(-18, -15, 36, 30);
+        ctx.restore();
+
+        ctx.save();
+        ctx.rotate(p.aimAngle);
+        ctx.fillRect(0, -6, 28, 12);
+        ctx.strokeRect(-12, -12, 24, 24);
+        ctx.restore();
+
+        ctx.restore();
+    }
+
+    // Dibujar Balas
+    ctx.shadowBlur = 10;
+    [...gameState.bullets, ...gameState.enemyBullets].forEach(b => {
+        if (!isOnScreen(b.x, b.y)) return;
+
+        ctx.shadowColor = b.color;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.ellipse(b.x, b.y, 8, 4, Math.atan2(b.vy, b.vx), 0, Math.PI*2);
+        ctx.fill();
+    });
+
+    updateHUD();
+}
+
+function drawBar(x, y, w, h, val, max, color) {
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, Math.max(0, (val/max)*w), h);
+}
+
+// ==========================================
+// INPUTS LOCALES
+// ==========================================
+window.addEventListener('keydown', e => {
+    if(!myPendingUpgrade) {
+        keys[e.key.toLowerCase()] = true;
+        // Prevenir scroll con flechas/espacio si está en juego
+        if(gameRunning && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+            e.preventDefault();
+        }
+    }
+});
+window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+});
+window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+window.addEventListener('mousedown', (e) => {
+    if(!myPendingUpgrade && gameRunning) {
+        mouse.down = true;
+        e.preventDefault();
+    }
+});
+window.addEventListener('mouseup', () => {
+    mouse.down = false;
+});
+
+// ✅ CORRECCIÓN 6: Controles móviles mejorados con joystick virtual
+canvas.addEventListener('touchstart', (e) => {
+    if(myPendingUpgrade || !gameRunning) return;
+    e.preventDefault();
+
+    for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+
+        if (touch.clientX < width / 2 && !touchJoystick.active) {
+            touchJoystick.active = true;
+            touchJoystick.touchId = touch.identifier;
+            touchJoystick.startX = touch.clientX;
+            touchJoystick.startY = touch.clientY;
+            touchJoystick.currentX = touch.clientX;
+            touchJoystick.currentY = touch.clientY;
+        } else if (touch.clientX >= width / 2 && !touchFire.active) {
+            touchFire.active = true;
+            touchFire.touchId = touch.identifier;
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+            mouse.down = true;
+        }
+    }
+}, {passive: false});
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+
+    for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+
+        if (touchJoystick.active && touch.identifier === touchJoystick.touchId) {
+            touchJoystick.currentX = touch.clientX;
+            touchJoystick.currentY = touch.clientY;
+
+            const dx = touchJoystick.currentX - touchJoystick.startX;
+            const dy = touchJoystick.currentY - touchJoystick.startY;
+            const dist = Math.hypot(dx, dy);
+
+            // Actualizar posición visual del joystick
+            const joystickKnob = document.getElementById('mobile-joystick-knob');
+            const maxDist = 35;
+            const clampedDx = Math.max(-maxDist, Math.min(maxDist, dx));
+            const clampedDy = Math.max(-maxDist, Math.min(maxDist, dy));
+            joystickKnob.style.transform = `translate(calc(-50% + ${clampedDx}px), calc(-50% + ${clampedDy}px))`;
+
+            if (dist > 15) {
+                keys['w'] = dy < -10;
+                keys['s'] = dy > 10;
+                keys['a'] = dx < -10;
+                keys['d'] = dx > 10;
+            } else {
+                keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
+            }
+        } else if (touchFire.active && touch.identifier === touchFire.touchId) {
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+        }
+    }
+}, {passive: false});
+
+canvas.addEventListener('touchend', (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+
+        if (touchJoystick.active && touch.identifier === touchJoystick.touchId) {
+            touchJoystick.active = false;
+            touchJoystick.touchId = null;
+            keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
+
+            const joystickKnob = document.getElementById('mobile-joystick-knob');
+            joystickKnob.style.transform = 'translate(-50%, -50%)';
+        }
+
+        if (touchFire.active && touch.identifier === touchFire.touchId) {
+            touchFire.active = false;
+            touchFire.touchId = null;
+            mouse.down = false;
+        }
+    }
+});
+
+</script>
 </body>
 </html>
-
