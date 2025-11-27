@@ -53,6 +53,13 @@
         <div id="debug-info" style="font-size: 12px; color: #888;"></div>
     </div>
 
+    <!-- HUD PVP -->
+    <div id="pvp-hud" class="hud-element hidden" style="top: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
+        <div style="font-size: 24px; color: var(--neon-pink); text-shadow: 0 0 10px var(--neon-pink);">DEATHMATCH</div>
+        <div id="pvp-scores" style="margin-top: 10px; font-size: 18px;"></div>
+        <div style="margin-top: 10px; font-size: 14px; color: #888;">Primera a 20 kills gana</div>
+    </div>
+
     <div id="core-health-container" class="hud-element hidden">
         <div style="margin-bottom: 5px; color: var(--neon-blue);">INTEGRIDAD DEL NÚCLEO</div>
         <div id="core-health-bar"><div id="core-health-fill"></div></div>
@@ -60,7 +67,18 @@
 
     <div id="main-menu" class="interactive-menu">
         <h1>NEON CORE: OVERDRIVE</h1>
-        <p style="color: #aaa; margin-bottom: 30px;">Defensa Cooperativa Avanzada</p>
+        <p style="color: #aaa; margin-bottom: 20px;">Elige tu modo de batalla</p>
+
+        <!-- Selector de Modo -->
+        <div style="margin: 20px 0;">
+            <button id="btnModePVE" style="background: var(--neon-blue); color: #000; width: 45%; margin: 5px;">PVE: CO-OP</button>
+            <button id="btnModePVP" style="width: 45%; margin: 5px;">PVP: DEATHMATCH</button>
+        </div>
+
+        <div id="mode-description" style="color: #aaa; font-size: 0.9em; margin-bottom: 20px; min-height: 40px;">
+            Defiende el núcleo cooperativamente contra oleadas de enemigos
+        </div>
+
         <button id="btnHost">HOSTEAR PARTIDA</button>
         <div style="margin: 20px 0; display: flex; align-items: center; justify-content: center;">
             <hr style="border-color: #333; width: 30%;"> <span style="margin: 0 10px; color: #666;">O</span> <hr style="border-color: #333; width: 30%;">
@@ -165,6 +183,10 @@ let connections = [];
 let myPendingUpgrade = false;
 let syncCounter = 0; // ✅ CORRECCIÓN 5: Contador para sincronización optimizada
 
+// ✅ MODO DE JUEGO
+let gameMode = 'PVE'; // 'PVE' o 'PVP'
+const KILLS_TO_WIN = 20;
+
 // Definición de posibles mejoras
 const UPGRADES = [
     { id: 'dmg', title: 'Munición Calibre .50', desc: '+25% Daño de proyectil' },
@@ -183,9 +205,11 @@ let gameState = {
     obstacles: [],
     pickups: [],
     mines: [],
+    powerups: [], // ✅ Cajas de poder para PVP
     coreHealth: 200, maxCoreHealth: 200,
     score: 0, wave: 1,
-    gameTime: 0
+    gameTime: 0,
+    lastPowerupSpawn: 0 // ✅ Timer para spawn de powerups
 };
 
 // Input local
@@ -210,13 +234,32 @@ function resize() {
 }
 window.addEventListener('resize', resize); resize();
 
+// ✅ Selector de modo de juego
+document.getElementById('btnModePVE').onclick = () => {
+    gameMode = 'PVE';
+    document.getElementById('btnModePVE').style.background = 'var(--neon-blue)';
+    document.getElementById('btnModePVE').style.color = '#000';
+    document.getElementById('btnModePVP').style.background = 'transparent';
+    document.getElementById('btnModePVP').style.color = 'var(--neon-blue)';
+    document.getElementById('mode-description').innerText = 'Defiende el núcleo cooperativamente contra oleadas de enemigos';
+};
+
+document.getElementById('btnModePVP').onclick = () => {
+    gameMode = 'PVP';
+    document.getElementById('btnModePVP').style.background = 'var(--neon-pink)';
+    document.getElementById('btnModePVP').style.color = '#000';
+    document.getElementById('btnModePVE').style.background = 'transparent';
+    document.getElementById('btnModePVE').style.color = 'var(--neon-blue)';
+    document.getElementById('mode-description').innerText = 'Combate PvP hasta 20 kills. Recoge cajas de poder para mejorar tu arsenal';
+};
+
 document.getElementById('btnHost').onclick = () => {
-    initAudio(); // ✅ Iniciar audio con interacción
+    initAudio();
     initPeer(true);
 };
 
 document.getElementById('btnJoin').onclick = () => {
-    initAudio(); // ✅ Iniciar audio con interacción
+    initAudio();
     const id = document.getElementById('joinInput').value.trim();
     if(id) initPeer(false, id);
 };
@@ -319,6 +362,9 @@ function initPeer(host, idToJoin = null) {
 
             connections.push(c);
             c.on('open', () => {
+                // ✅ Enviar modo de juego al cliente que se conecta
+                c.send({ type: 'SET_GAMEMODE', mode: gameMode });
+
                 gameState.players[c.peer] = createPlayer(c.peer, false);
                 updateLobbyCount();
                 broadcast({ type: 'LOBBY_UPDATE', count: Object.keys(gameState.players).length });
@@ -385,7 +431,11 @@ function handleClientData(playerId, data) {
 function handleHostData(data) {
     if (!data || !data.type) return;
 
-    if (data.type === 'UPDATE') {
+    if (data.type === 'SET_GAMEMODE') {
+        // ✅ Recibir modo de juego del host
+        gameMode = data.mode;
+        console.log('Modo de juego establecido:', gameMode);
+    } else if (data.type === 'UPDATE') {
         gameState = data.state;
         if (!gameRunning) startGameClient();
     } else if (data.type === 'LOBBY_UPDATE') {
@@ -394,9 +444,18 @@ function handleHostData(data) {
         if (data.options && Array.isArray(data.options)) {
             showLevelUpMenu(data.options);
         }
+    } else if (data.type === 'POWERUP_OPTIONS') {
+        // ✅ Mostrar opciones de powerup en PVP
+        if (data.options && Array.isArray(data.options)) {
+            showLevelUpMenu(data.options);
+        }
     } else if (data.type === 'WAVE_START') {
         showWaveMessage(data.msg);
         playSound('levelup');
+    } else if (data.type === 'PVP_WIN') {
+        // ✅ Mensaje de ganador PVP
+        alert(`🏆 ¡${data.winner} GANA! ${KILLS_TO_WIN} KILLS`);
+        location.reload();
     } else if (data.type === 'GAME_OVER') {
         alert("MISIÓN FALLIDA. El Núcleo ha sido destruido.\nScore Final: " + data.score);
         location.reload();
@@ -419,33 +478,84 @@ function broadcast(msg) {
 function createPlayer(id, isCap) {
     const colors = [COLORS.blue, COLORS.pink, COLORS.green, COLORS.yellow];
     const shortId = id.substring(0, 4).toUpperCase();
+    const playerCount = Object.keys(gameState.players).length;
+
+    // ✅ Posiciones de spawn según modo
+    let spawnX, spawnY;
+    if (gameMode === 'PVP') {
+        // Spawn en esquinas del mapa para PVP
+        const spawnPoints = [
+            { x: 100, y: 100 },           // Arriba-izquierda
+            { x: width - 100, y: 100 },   // Arriba-derecha
+            { x: 100, y: height - 100 },  // Abajo-izquierda
+            { x: width - 100, y: height - 100 } // Abajo-derecha
+        ];
+        const spawn = spawnPoints[playerCount % 4];
+        spawnX = spawn.x;
+        spawnY = spawn.y;
+    } else {
+        // Spawn circular alrededor del núcleo para PVE
+        spawnX = width/2 + Math.cos(playerCount) * 100;
+        spawnY = height/2 + Math.sin(playerCount) * 100;
+    }
+
     return {
         id: id, shortId: shortId,
-        x: width/2 + Math.cos(Object.keys(gameState.players).length) * 100,
-        y: height/2 + Math.sin(Object.keys(gameState.players).length) * 100,
+        x: spawnX, y: spawnY,
         angle: 0, aimAngle: 0,
-        color: isCap ? colors[0] : colors[Object.keys(gameState.players).length % colors.length],
+        color: isCap ? colors[0] : colors[playerCount % colors.length],
         hp: 100, maxHp: 100,
         exp: 0, level: 1, expToNext: 50,
-        speed: 4, fireRate: 30, damage: 20, bulletSpeed: 15, // ✅ fireRate: 30 frames (disparo lento inicial ~2/seg)
+        speed: 4, fireRate: 30, damage: 20, bulletSpeed: 15,
         cooldown: 0, keys: {}, isShooting: false, needsUpgrade: false,
-        respawnTimer: 0
+        respawnTimer: 0,
+        // ✅ Stats PVP
+        kills: 0,
+        deaths: 0,
+        upgradeCount: 0 // Máximo 4 mejoras en PVP
     };
 }
 
 function spawnObstacles() {
-    // ✅ Aumentado de 15 a 20 obstáculos para más cobertura táctica
-    for(let i=0; i<20; i++) {
-        const size = 40 + Math.random() * 60;
-        const x = Math.random() * (width - size);
-        const y = Math.random() * (height - size);
-        // No spawnear cerca del núcleo (zona segura)
-        if (Math.hypot(x + size/2 - width/2, y + size/2 - height/2) < 250) continue;
-        gameState.obstacles.push({
-            x, y, w: size, h: size, hp: 200, maxHp: 200, type: 'crate'
+    if (gameMode === 'PVP') {
+        // ✅ Mapa PVP: Diseño simétrico tipo arena
+        // Paredes perimetrales
+        const wallThickness = 20;
+        gameState.obstacles.push(
+            // Paredes exteriores
+            { x: 0, y: 0, w: width, h: wallThickness, hp: 9999, maxHp: 9999, type: 'wall' },
+            { x: 0, y: height - wallThickness, w: width, h: wallThickness, hp: 9999, maxHp: 9999, type: 'wall' },
+            { x: 0, y: 0, w: wallThickness, h: height, hp: 9999, maxHp: 9999, type: 'wall' },
+            { x: width - wallThickness, y: 0, w: wallThickness, h: height, hp: 9999, maxHp: 9999, type: 'wall' }
+        );
+
+        // Obstáculos estratégicos en el centro y esquinas
+        const centerObstacles = [
+            { x: width/2 - 75, y: height/2 - 75, w: 150, h: 150 }, // Centro grande
+            { x: width/4 - 40, y: height/4 - 40, w: 80, h: 80 },
+            { x: (width * 3/4) - 40, y: height/4 - 40, w: 80, h: 80 },
+            { x: width/4 - 40, y: (height * 3/4) - 40, w: 80, h: 80 },
+            { x: (width * 3/4) - 40, y: (height * 3/4) - 40, w: 80, h: 80 }
+        ];
+
+        centerObstacles.forEach(o => {
+            gameState.obstacles.push({ ...o, hp: 300, maxHp: 300, type: 'crate' });
         });
+
+        console.log('⚔️ Mapa PVP generado - Arena de combate lista');
+    } else {
+        // ✅ Mapa PVE: Obstáculos aleatorios para defensa
+        for(let i=0; i<20; i++) {
+            const size = 40 + Math.random() * 60;
+            const x = Math.random() * (width - size);
+            const y = Math.random() * (height - size);
+            if (Math.hypot(x + size/2 - width/2, y + size/2 - height/2) < 250) continue;
+            gameState.obstacles.push({
+                x, y, w: size, h: size, hp: 200, maxHp: 200, type: 'crate'
+            });
+        }
+        console.log('🧱 Obstáculos generados:', gameState.obstacles.length, '- ¡Úsalos como cobertura!');
     }
-    console.log('🧱 Obstáculos generados:', gameState.obstacles.length, '- ¡Úsalos como cobertura!');
 }
 
 function startGameHost() {
@@ -472,7 +582,14 @@ function startGameClient() {
 
 function startGameUI() {
     ['lobby', 'main-menu'].forEach(el => document.getElementById(el).classList.add('hidden'));
-    ['top-hud', 'core-health-container'].forEach(el => document.getElementById(el).classList.remove('hidden'));
+
+    if (gameMode === 'PVP') {
+        // Mostrar HUD PVP
+        document.getElementById('pvp-hud').classList.remove('hidden');
+    } else {
+        // Mostrar HUD PVE
+        ['top-hud', 'core-health-container'].forEach(el => document.getElementById(el).classList.remove('hidden'));
+    }
     resize();
 }
 
@@ -482,10 +599,97 @@ function isOnScreen(x, y, margin = 100) {
            y > -margin && y < height + margin;
 }
 
+// ✅ FUNCIONES PVP - POWERUPS
+function spawnPowerup() {
+    // Buscar posición válida (no sobre obstáculos)
+    let x, y, attempts = 0;
+    do {
+        x = 100 + Math.random() * (width - 200);
+        y = 100 + Math.random() * (height - 200);
+        attempts++;
+        if (attempts > 50) return; // Evitar loop infinito
+    } while (gameState.obstacles.some(o =>
+        x > o.x - 50 && x < o.x + o.w + 50 && y > o.y - 50 && y < o.y + o.h + 50
+    ));
+
+    // Seleccionar 2 mejoras al azar
+    const availableUpgrades = [...UPGRADES].sort(() => 0.5 - Math.random()).slice(0, 2);
+
+    gameState.powerups.push({
+        x, y,
+        lifetime: 180, // 3 segundos a 60fps
+        options: availableUpgrades.map(u => u.id)
+    });
+
+    console.log('📦 Powerup spawneado en', x.toFixed(0), y.toFixed(0));
+}
+
+function updatePowerups() {
+    // Spawn cada 30 segundos (1800 frames a 60fps)
+    if (gameState.gameTime - gameState.lastPowerupSpawn > 1800) {
+        spawnPowerup();
+        gameState.lastPowerupSpawn = gameState.gameTime;
+    }
+
+    // Actualizar lifetime y recolección
+    for (let i = gameState.powerups.length - 1; i >= 0; i--) {
+        const p = gameState.powerups[i];
+        p.lifetime--;
+
+        // Expirar
+        if (p.lifetime <= 0) {
+            gameState.powerups.splice(i, 1);
+            continue;
+        }
+
+        // Recolección por jugadores
+        for (let id in gameState.players) {
+            const player = gameState.players[id];
+            if (player.hp > 0 && player.upgradeCount < 4) {
+                const dist = Math.hypot(player.x - p.x, player.y - p.y);
+                if (dist < 40) {
+                    // Enviar opciones al jugador
+                    const msg = { type: 'POWERUP_OPTIONS', options: p.options };
+                    if (id === myId) {
+                        showLevelUpMenu(p.options);
+                    } else {
+                        sendTo(id, msg);
+                    }
+                    player.needsUpgrade = true;
+                    gameState.powerups.splice(i, 1);
+                    playSound('collect');
+                    break;
+                }
+            }
+        }
+    }
+}
+
+function updatePVPScores() {
+    let html = '';
+    const sortedPlayers = Object.values(gameState.players).sort((a, b) => b.kills - a.kills);
+
+    sortedPlayers.forEach((p, idx) => {
+        const emoji = idx === 0 ? '👑 ' : '';
+        html += `<div style="color: ${p.color};">${emoji}${p.shortId}: ${p.kills} kills / ${p.deaths} deaths</div>`;
+    });
+
+    document.getElementById('pvp-scores').innerHTML = html;
+
+    // Verificar ganador
+    const winner = sortedPlayers.find(p => p.kills >= KILLS_TO_WIN);
+    if (winner) {
+        broadcast({ type: 'PVP_WIN', winner: winner.shortId, killerId: winner.id });
+        alert(`🏆 ¡${winner.shortId} GANA! ${KILLS_TO_WIN} KILLS`);
+        location.reload();
+    }
+}
+
 
 // --- BUCLE PRINCIPAL HOST (Físicas y Lógica) ---
 function gameLoopHost() {
-    if (gameState.coreHealth <= 0) {
+    // ✅ Condición de derrota solo en PVE
+    if (gameMode === 'PVE' && gameState.coreHealth <= 0) {
         broadcast({ type: 'GAME_OVER', score: gameState.score });
         alert("GAME OVER - Host");
         location.reload(); return;
@@ -496,14 +700,21 @@ function gameLoopHost() {
     // ✅ APLICAR INPUT DEL HOST (jugador local)
     const myPlayer = gameState.players[myId];
     if (myPlayer && !myPendingUpgrade) {
-        myPlayer.keys = {...keys}; // Copiar keys actuales
+        myPlayer.keys = {...keys};
         myPlayer.aimAngle = Math.atan2(mouse.y - myPlayer.y, mouse.x - myPlayer.x);
         myPlayer.isShooting = mouse.down;
     }
 
-    // ✅ Spawn rate reducido al inicio (0.008 en vez de 0.015)
-    const spawnChance = 0.008 + (gameState.wave * 0.005); // Crece más rápido con oleadas
-    if (Math.random() < spawnChance) spawnEnemy();
+    // ✅ Lógica específica por modo
+    if (gameMode === 'PVE') {
+        // Spawn de enemigos solo en PVE
+        const spawnChance = 0.008 + (gameState.wave * 0.005);
+        if (Math.random() < spawnChance) spawnEnemy();
+    } else {
+        // Lógica PVP: powerups y scores
+        updatePowerups();
+        updatePVPScores();
+    }
 
     // Actualizar Jugadores
     for (let id in gameState.players) {
@@ -552,7 +763,8 @@ function gameLoopHost() {
                 y: p.y + Math.sin(p.aimAngle)*20,
                 vx: Math.cos(p.aimAngle) * p.bulletSpeed,
                 vy: Math.sin(p.aimAngle) * p.bulletSpeed,
-                dmg: p.damage, color: p.color, life: 80
+                dmg: p.damage, color: p.color, life: 80,
+                ownerId: id // ✅ Necesario para PVP (saber quién disparó)
             });
             p.cooldown = p.fireRate;
             playSound('shoot');
@@ -572,9 +784,13 @@ function gameLoopHost() {
     }
 
     updateBullets(gameState.bullets, true);
-    updateBullets(gameState.enemyBullets, false);
-    updateEnemies();
-    updateMinesAndObstacles();
+
+    // ✅ Solo en PVE: enemigos y sus balas
+    if (gameMode === 'PVE') {
+        updateBullets(gameState.enemyBullets, false);
+        updateEnemies();
+        updateMinesAndObstacles();
+    }
 
     // ✅ CORRECCIÓN 5: Sincronización optimizada (cada 3 frames)
     syncCounter++;
@@ -646,10 +862,40 @@ function updateBullets(arr, isPlayerBullet) {
 
         let hit = false;
         if (isPlayerBullet) {
-            for (let j = gameState.enemies.length - 1; j >= 0; j--) {
-                const e = gameState.enemies[j];
-                if (Math.hypot(e.x - b.x, e.y - b.y) < 25) {
-                    damageEnemy(e, b.dmg, j); hit = true; break;
+            // ✅ PVP: Balas jugador vs jugador
+            if (gameMode === 'PVP') {
+                for (let id in gameState.players) {
+                    const target = gameState.players[id];
+                    if (b.ownerId && id !== b.ownerId && target.hp > 0) {
+                        if (Math.hypot(target.x - b.x, target.y - b.y) < 20) {
+                            target.hp -= b.dmg;
+                            playSound('hit');
+                            hit = true;
+
+                            if (target.hp <= 0) {
+                                target.hp = 0;
+                                target.deaths++;
+                                target.respawnTimer = 300;
+                                const shooter = gameState.players[b.ownerId];
+                                if (shooter) {
+                                    shooter.kills++;
+                                    console.log(`💀 ${shooter.shortId} mató a ${target.shortId}`);
+                                }
+                                playSound('explode');
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // vs Enemigos (solo PVE)
+            if (!hit && gameMode === 'PVE') {
+                for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                    const e = gameState.enemies[j];
+                    if (Math.hypot(e.x - b.x, e.y - b.y) < 25) {
+                        damageEnemy(e, b.dmg, j); hit = true; break;
+                    }
                 }
             }
             if (!hit) {
@@ -868,13 +1114,31 @@ function handleUpgradePick(playerId, upgradeId) {
     const p = gameState.players[playerId];
     if (!p) return;
 
+    // ✅ En PVP: verificar límite de mejoras
+    if (gameMode === 'PVP' && p.upgradeCount >= 4) {
+        console.warn('Máximo de mejoras alcanzado (4)');
+        p.needsUpgrade = false;
+        if (playerId === myId) {
+            myPendingUpgrade = false;
+            document.getElementById('levelup-overlay').classList.add('hidden');
+        }
+        return;
+    }
+
     switch(upgradeId) {
         case 'dmg': p.damage *= 1.25; break;
-        case 'rate': p.fireRate = Math.max(5, p.fireRate * 0.7); break; // ✅ 30% reducción (0.7), límite mínimo 5 frames
+        case 'rate': p.fireRate = Math.max(5, p.fireRate * 0.7); break;
         case 'speed': p.speed *= 1.15; break;
         case 'hp': p.maxHp *= 1.3; p.hp = p.maxHp; break;
         case 'bulletSpeed': p.bulletSpeed *= 1.3; break;
     }
+
+    // ✅ Incrementar contador en PVP
+    if (gameMode === 'PVP') {
+        p.upgradeCount++;
+        console.log(`${p.shortId} mejoró ${upgradeId} (${p.upgradeCount}/4)`);
+    }
+
     p.needsUpgrade = false;
     if (playerId === myId) {
         myPendingUpgrade = false;
@@ -937,19 +1201,52 @@ function render() {
         ctx.fill();
     });
 
-    // Dibujar Núcleo
-    const corePulse = 35 + Math.sin(gameState.gameTime/30)*5;
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = COLORS.blue;
-    ctx.fillStyle = COLORS.white;
-    ctx.beginPath();
-    ctx.arc(width/2, height/2, corePulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = COLORS.blue;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(width/2, height/2, 50, 0, Math.PI*2);
-    ctx.stroke();
+    // ✅ Dibujar Powerups (Cajas de PVP)
+    if (gameMode === 'PVP') {
+        gameState.powerups.forEach(pw => {
+            if (!isOnScreen(pw.x, pw.y)) return;
+
+            const pulseSize = 20 + Math.sin(gameState.gameTime / 10) * 5;
+            const alpha = pw.lifetime < 60 ? (pw.lifetime / 60) : 1;
+
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = COLORS.yellow;
+            ctx.fillStyle = COLORS.yellow;
+            ctx.globalAlpha = alpha;
+
+            ctx.save();
+            ctx.translate(pw.x, pw.y);
+            ctx.rotate(gameState.gameTime / 30);
+            ctx.fillRect(-pulseSize, -pulseSize, pulseSize * 2, pulseSize * 2);
+            ctx.strokeStyle = COLORS.pink;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-pulseSize, -pulseSize, pulseSize * 2, pulseSize * 2);
+            ctx.restore();
+
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = COLORS.yellow;
+            ctx.font = "bold 12px 'Courier New'";
+            ctx.textAlign = "center";
+            ctx.fillText("POWER", pw.x, pw.y - 35);
+        });
+    }
+
+    // Dibujar Núcleo (solo PVE)
+    if (gameMode === 'PVE') {
+        const corePulse = 35 + Math.sin(gameState.gameTime/30)*5;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = COLORS.blue;
+        ctx.fillStyle = COLORS.white;
+        ctx.beginPath();
+        ctx.arc(width/2, height/2, corePulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = COLORS.blue;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(width/2, height/2, 50, 0, Math.PI*2);
+        ctx.stroke();
+    }
 
     // Dibujar Enemigos
     gameState.enemies.forEach(e => {
@@ -1019,10 +1316,25 @@ function render() {
         ctx.fillStyle = p.color;
         ctx.textAlign = "center";
         ctx.font = "bold 14px 'Courier New'";
-        ctx.fillText(`[LV.${p.level}] ${p.shortId}`, 0, -45);
+
+        // ✅ Mostrar info según modo
+        if (gameMode === 'PVP') {
+            ctx.fillText(`${p.shortId} [${p.kills}/${p.deaths}]`, 0, -45);
+            ctx.font = "bold 10px 'Courier New'";
+            ctx.fillStyle = COLORS.yellow;
+            ctx.fillText(`⭐${p.upgradeCount}/4`, 0, -55);
+            ctx.fillStyle = p.color;
+            ctx.font = "bold 14px 'Courier New'";
+        } else {
+            ctx.fillText(`[LV.${p.level}] ${p.shortId}`, 0, -45);
+        }
 
         drawBar(-25, -35, 50, 6, p.hp, p.maxHp, p.color);
-        drawBar(-25, -28, 50, 3, p.exp, p.expToNext, COLORS.yellow);
+
+        // Barra EXP solo en PVE
+        if (gameMode === 'PVE') {
+            drawBar(-25, -28, 50, 3, p.exp, p.expToNext, COLORS.yellow);
+        }
 
         // ✅ CORRECCIÓN 7: Indicador visual de level-up
         if (p.needsUpgrade && id !== myId) {
