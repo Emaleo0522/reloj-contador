@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Core: OVERDRIVE</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --neon-blue: #0ff;
+            --neon-pink: #f0f;
+            --neon-green: #0f0;
+            --neon-yellow: #ff0;
+            --neon-red: #f00;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #020202;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+            -webkit-font-smoothing: antialiased;
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+            image-rendering: crisp-edges;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hud-element {
+            position: absolute;
+            pointer-events: none;
+            text-shadow: 0 0 5px #000, 0 0 10px #000;
+            font-weight: bold;
+        }
+
+        #top-hud {
+            top: 10px;
+            width: 95%;
+            max-width: 1400px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            color: var(--neon-yellow);
+            padding: 0 20px;
+        }
+
+        #core-health-container {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        #core-health-bar {
+            height: 25px;
+            border: 2px solid #fff;
+            background: #222;
+            padding: 2px;
+            box-shadow: 0 0 15px var(--neon-blue);
+            border-radius: 2px;
+        }
+
+        #core-health-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), #fff);
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+
+        .interactive-menu {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px;
+            border: 3px solid var(--neon-blue);
+            border-radius: 15px;
+            box-shadow: 0 0 30px var(--neon-blue), inset 0 0 20px rgba(0, 255, 255, 0.2);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        h1 {
+            color: var(--neon-blue);
+            text-shadow: 0 0 15px var(--neon-blue);
+            margin-bottom: 5px;
+            letter-spacing: 2px;
+            font-size: 2em;
+        }
+
+        h2 {
+            color: var(--neon-pink);
+            margin-top: 0;
+        }
+
+        button {
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-blue);
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input {
+            background: #111;
+            border: 2px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 12px;
+            font-size: 1.1rem;
+            width: 100%;
+            text-align: center;
+            font-family: inherit;
+            margin-bottom: 10px;
+            transition: box-shadow 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        input::placeholder {
+            color: rgba(0, 255, 255, 0.5);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #id-display {
+            user-select: text;
+            -webkit-user-select: text;
+            background: #222;
+            padding: 10px;
+            border: 1px dotted var(--neon-blue);
+            word-break: break-all;
+            font-size: 0.9em;
+            cursor: text;
+            margin: 10px 0;
+        }
+
+        #levelup-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .upgrade-card {
+            background: #111;
+            border: 2px solid var(--neon-green);
+            padding: 20px;
+            margin: 10px;
+            width: 90%;
+            max-width: 300px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+
+        .upgrade-card:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 25px var(--neon-green);
+            transform: scale(1.05);
+        }
+
+        .upgrade-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .upgrade-desc {
+            font-size: 0.9em;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            padding: 8px 15px;
+            border: 2px solid var(--neon-yellow);
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--neon-yellow);
+            font-size: 0.9em;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5em; }
+            button { font-size: 0.9rem; padding: 10px 20px; }
+            .upgrade-card { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-layer">
+    <div id="top-hud" class="hud-element hidden">
+        <div id="wave-info">WAVE: 1</div>
+        <div id="score-info">SCORE: 0</div>
+    </div>
+
+    <div id="core-health-container" class="hud-element hidden">
+        <div style="margin-bottom: 5px; color: var(--neon-blue);">CORE INTEGRITY</div>
+        <div id="core-health-bar">
+            <div id="core-health-fill"></div>
+        </div>
+    </div>
+
+    <div id="connection-status" class="connection-status hidden"></div>
+
+    <div id="main-menu" class="interactive-menu">
+        <h1>NEON CORE: OVERDRIVE</h1>
+        <p style="color: #aaa; margin-bottom: 30px;">Co-op Defense Protocol</p>
+        <button id="btnHost">HOST GAME</button>
+        <div style="margin: 20px 0; display: flex; align-items: center; justify-content: center;">
+            <hr style="border-color: #333; width: 30%;">
+            <span style="margin: 0 10px; color: #666;">OR</span>
+            <hr style="border-color: #333; width: 30%;">
+        </div>
+        <input type="text" id="joinInput" placeholder="Paste Host ID here">
+        <button id="btnJoin">JOIN GAME</button>
+    </div>
+
+    <div id="lobby" class="interactive-menu hidden">
+        <h2>LOBBY</h2>
+        <p id="status-msg">Connecting to network...</p>
+        <div id="host-info" class="hidden" style="margin: 20px 0;">
+            <p>Share this ID with your squad:</p>
+            <div id="id-display" title="Click to copy">GENERATING...</div>
+        </div>
+        <p id="players-count" style="font-size: 1.2em; color: var(--neon-green);">Players ready: 1</p>
+        <button id="btnStart" class="hidden" style="width: 100%; margin: 20px 0 0 0; font-size: 1.3rem; background: var(--neon-green); color: #000;">DEPLOY!</button>
+        <p id="client-wait" class="hidden" style="color: #888; font-style: italic; margin-top: 20px;">Waiting for squad leader...</p>
+    </div>
+
+    <div id="levelup-overlay" class="hidden">
+        <h2 style="color: var(--neon-green); font-size: 3em; text-shadow: 0 0 20px var(--neon-green); margin: 20px;">LEVEL UP!</h2>
+        <p style="font-size: 1.2em; margin-bottom: 20px;">Choose a system upgrade:</p>
+        <div id="upgrade-container" style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 1000px;"></div>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 style="color: var(--neon-red); font-size: 3em; text-shadow: 0 0 30px var(--neon-red);">CORE BREACHED</h1>
+        <p style="font-size: 1.5em; margin: 20px;">Mission Failed</p>
+        <p id="final-score" style="font-size: 2em; color: var(--neon-yellow); margin: 20px;"></p>
+        <p id="final-wave" style="font-size: 1.2em; color: var(--neon-blue); margin: 20px;"></p>
+        <button id="btnRestart" style="font-size: 1.2rem; padding: 15px 40px;">RESTART</button>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// ==========================================
+// CONSTANTS
+// ==========================================
+const CONFIG = {
+    CANVAS_WIDTH: window.innerWidth,
+    CANVAS_HEIGHT: window.innerHeight,
+
+    // Core
+    CORE_RADIUS: 35,
+    CORE_HEALTH: 200,
+    CORE_COLLISION_RADIUS: 40,
+
+    // Player
+    PLAYER_SPEED: 4,
+    PLAYER_HP: 100,
+    PLAYER_SIZE: 15,
+    PLAYER_COLLISION_RADIUS: 20,
+    PLAYER_FIRE_RATE: 15,
+    PLAYER_DAMAGE: 20,
+    PLAYER_BULLET_SPEED: 15,
+    PLAYER_RESPAWN_TIME: 5000,
+
+    // Enemies
+    ENEMY_SPAWN_BASE: 0.015,
+    ENEMY_SPAWN_SCALE: 0.004,
+    ENEMY_CHASER_HP: 30,
+    ENEMY_SHOOTER_HP: 50,
+    ENEMY_BOMBER_HP: 80,
+    ENEMY_COLLISION_RADIUS: 25,
+
+    // Obstacles
+    OBSTACLE_COUNT: 15,
+    OBSTACLE_MIN_SIZE: 40,
+    OBSTACLE_MAX_SIZE: 100,
+    OBSTACLE_HP: 200,
+    OBSTACLE_SAFE_DISTANCE: 200,
+
+    // Pickups
+    PICKUP_RADIUS: 30,
+    PICKUP_EXP_BASE: 10,
+    PICKUP_EXP_SHOOTER: 15,
+    PICKUP_EXP_BOMBER: 25,
+
+    // Bullets
+    BULLET_LIFETIME: 80,
+    ENEMY_BULLET_DAMAGE: 15,
+    ENEMY_BULLET_SPEED: 8,
+
+    // Mines
+    MINE_RADIUS: 150,
+    MINE_DAMAGE: 100,
+    MINE_TIMER: 120,
+
+    // Progression
+    SCORE_PER_WAVE: 200,
+    EXP_SCALE: 1.5,
+    INITIAL_EXP_REQUIRED: 50,
+
+    // Network
+    MAX_INPUT_RATE: 60, // Max inputs per second
+    STATE_SYNC_RATE: 20, // Full sync every N frames
+    PING_INTERVAL: 3000,
+    CONNECTION_TIMEOUT: 10000,
+
+    // Spatial Grid
+    GRID_CELL_SIZE: 100
+};
+
+// Cached CSS colors
+const COLORS = {
+    BLUE: '#0ff',
+    PINK: '#f0f',
+    GREEN: '#0f0',
+    YELLOW: '#ff0',
+    RED: '#f00'
+};
+
+const PLAYER_COLORS = [COLORS.BLUE, COLORS.PINK, COLORS.GREEN, COLORS.YELLOW];
+
+// ==========================================
+// AUDIO SYSTEM (with pooling)
+// ==========================================
+class AudioManager {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.sounds = {
+            shoot: { type: 'square', freq: 350, endFreq: 100, duration: 0.1, gain: 0.05 },
+            enemyShoot: { type: 'sawtooth', freq: 200, endFreq: 50, duration: 0.15, gain: 0.05 },
+            explode: { type: 'sawtooth', freq: 150, endFreq: 10, duration: 0.4, gain: 0.15 },
+            hit: { type: 'triangle', freq: 300, endFreq: 200, duration: 0.1, gain: 0.1 },
+            levelup: { type: 'sine', freq: 400, endFreq: 800, duration: 0.5, gain: 0.1, sweep: true },
+            collect: { type: 'sine', freq: 600, endFreq: 700, duration: 0.05, gain: 0.05 }
+        };
+        this.activeNodes = 0;
+        this.maxNodes = 20;
+    }
+
+    play(name) {
+        if (this.activeNodes >= this.maxNodes) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const s = this.sounds[name];
+        if (!s) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = s.type;
+
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(s.freq, now);
+
+        if (s.sweep) {
+            osc.frequency.linearRampToValueAtTime(s.endFreq, now + s.duration);
+        } else {
+            osc.frequency.exponentialRampToValueAtTime(s.endFreq, now + s.duration);
+        }
+
+        gain.gain.setValueAtTime(s.gain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + s.duration);
+
+        osc.start(now);
+        osc.stop(now + s.duration);
+
+        this.activeNodes++;
+        setTimeout(() => this.activeNodes--, s.duration * 1000);
+    }
+}
+
+// ==========================================
+// SPATIAL GRID (for collision optimization)
+// ==========================================
+class SpatialGrid {
+    constructor(width, height, cellSize) {
+        this.cellSize = cellSize;
+        this.cols = Math.ceil(width / cellSize);
+        this.rows = Math.ceil(height / cellSize);
+        this.clear();
+    }
+
+    clear() {
+        this.grid = Array(this.rows * this.cols).fill(null).map(() => []);
+    }
+
+    hash(x, y) {
+        const col = Math.floor(x / this.cellSize);
+        const row = Math.floor(y / this.cellSize);
+        if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return -1;
+        return row * this.cols + col;
+    }
+
+    insert(entity, x, y) {
+        const idx = this.hash(x, y);
+        if (idx !== -1) this.grid[idx].push(entity);
+    }
+
+    query(x, y, radius) {
+        const result = [];
+        const minCol = Math.max(0, Math.floor((x - radius) / this.cellSize));
+        const maxCol = Math.min(this.cols - 1, Math.floor((x + radius) / this.cellSize));
+        const minRow = Math.max(0, Math.floor((y - radius) / this.cellSize));
+        const maxRow = Math.min(this.rows - 1, Math.floor((y + radius) / this.cellSize));
+
+        for (let row = minRow; row <= maxRow; row++) {
+            for (let col = minCol; col <= maxCol; col++) {
+                const idx = row * this.cols + col;
+                result.push(...this.grid[idx]);
+            }
+        }
+        return result;
+    }
+}
+
+// ==========================================
+// OBJECT POOLS
+// ==========================================
+class ObjectPool {
+    constructor(factory, initialSize = 50) {
+        this.factory = factory;
+        this.pool = [];
+        this.active = [];
+
+        for (let i = 0; i < initialSize; i++) {
+            this.pool.push(factory());
+        }
+    }
+
+    acquire() {
+        const obj = this.pool.length > 0 ? this.pool.pop() : this.factory();
+        this.active.push(obj);
+        return obj;
+    }
+
+    release(obj) {
+        const idx = this.active.indexOf(obj);
+        if (idx !== -1) {
+            this.active.splice(idx, 1);
+            this.pool.push(obj);
+        }
+    }
+
+    releaseAll() {
+        this.pool.push(...this.active);
+        this.active = [];
+    }
+
+    getActive() {
+        return this.active;
+    }
+}
+
+// ==========================================
+// GAME STATE
+// ==========================================
+class GameState {
+    constructor() {
+        this.players = {};
+        this.enemies = [];
+        this.bullets = [];
+        this.enemyBullets = [];
+        this.obstacles = [];
+        this.pickups = [];
+        this.mines = [];
+        this.coreHealth = CONFIG.CORE_HEALTH;
+        this.maxCoreHealth = CONFIG.CORE_HEALTH;
+        this.score = 0;
+        this.wave = 1;
+        this.gameTime = 0;
+    }
+
+    serialize() {
+        return {
+            players: this.players,
+            enemies: this.enemies,
+            bullets: this.bullets,
+            enemyBullets: this.enemyBullets,
+            obstacles: this.obstacles,
+            pickups: this.pickups,
+            mines: this.mines,
+            coreHealth: this.coreHealth,
+            maxCoreHealth: this.maxCoreHealth,
+            score: this.score,
+            wave: this.wave,
+            gameTime: this.gameTime
+        };
+    }
+
+    deserialize(data) {
+        Object.assign(this, data);
+    }
+}
+
+// ==========================================
+// INPUT VALIDATOR
+// ==========================================
+class InputValidator {
+    static validateKeys(keys) {
+        const valid = {};
+        const allowed = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+        for (const key of allowed) {
+            valid[key] = keys[key] === true;
+        }
+        return valid;
+    }
+
+    static validateAngle(angle) {
+        const num = parseFloat(angle);
+        return !isNaN(num) && isFinite(num) ? num : 0;
+    }
+
+    static validateBoolean(value) {
+        return value === true;
+    }
+}
+
+// ==========================================
+// NETWORK MANAGER
+// ==========================================
+class NetworkManager {
+    constructor(isHost) {
+        this.isHost = isHost;
+        this.peer = null;
+        this.connections = [];
+        this.conn = null;
+        this.myId = null;
+        this.lastInputTime = 0;
+        this.syncCounter = 0;
+        this.onStateUpdate = null;
+        this.onPlayerJoin = null;
+        this.onPlayerLeave = null;
+        this.onGameStart = null;
+        this.onLevelUp = null;
+        this.onGameOver = null;
+        this.connectionCheckInterval = null;
+    }
+
+    init() {
+        return new Promise((resolve, reject) => {
+            this.peer = new Peer(null, {
+                debug: 0,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            this.peer.on('open', (id) => {
+                this.myId = id;
+                resolve(id);
+
+                if (this.isHost) {
+                    this.startConnectionMonitoring();
+                }
+            });
+
+            this.peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                reject(err);
+            });
+
+            if (this.isHost) {
+                this.peer.on('connection', (c) => this.handleIncomingConnection(c));
+            }
+        });
+    }
+
+    handleIncomingConnection(c) {
+        this.connections.push(c);
+
+        c.on('open', () => {
+            if (this.onPlayerJoin) this.onPlayerJoin(c.peer);
+        });
+
+        c.on('data', (data) => {
+            if (!data || !data.type) return;
+            this.handleClientMessage(c.peer, data);
+        });
+
+        c.on('close', () => {
+            this.removeConnection(c.peer);
+            if (this.onPlayerLeave) this.onPlayerLeave(c.peer);
+        });
+
+        c.on('error', (err) => {
+            console.error('Connection error:', err);
+            this.removeConnection(c.peer);
+        });
+    }
+
+    removeConnection(peerId) {
+        this.connections = this.connections.filter(c => c.peer !== peerId);
+    }
+
+    connectToHost(hostId) {
+        return new Promise((resolve, reject) => {
+            this.conn = this.peer.connect(hostId);
+
+            this.conn.on('open', () => {
+                this.conn.on('data', (data) => this.handleHostMessage(data));
+                this.startConnectionMonitoring();
+                resolve();
+            });
+
+            this.conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                reject(err);
+            });
+
+            this.conn.on('close', () => {
+                this.showGameOver('Connection lost', 0, 0);
+            });
+        });
+    }
+
+    handleClientMessage(playerId, data) {
+        switch (data.type) {
+            case 'INPUT':
+                if (this.onStateUpdate) {
+                    const validated = {
+                        keys: InputValidator.validateKeys(data.keys || {}),
+                        angle: InputValidator.validateAngle(data.angle),
+                        click: InputValidator.validateBoolean(data.click)
+                    };
+                    this.onStateUpdate(playerId, validated);
+                }
+                break;
+            case 'PICK_UPGRADE':
+                if (this.onLevelUp) {
+                    this.onLevelUp(playerId, data.upgradeId);
+                }
+                break;
+            case 'PING':
+                this.sendTo(playerId, { type: 'PONG', timestamp: data.timestamp });
+                break;
+        }
+    }
+
+    handleHostMessage(data) {
+        if (!data || !data.type) return;
+
+        switch (data.type) {
+            case 'UPDATE':
+                if (this.onStateUpdate) this.onStateUpdate(data.state);
+                break;
+            case 'LOBBY_UPDATE':
+                if (this.onPlayerJoin) this.onPlayerJoin(data.count);
+                break;
+            case 'START_GAME':
+                if (this.onGameStart) this.onGameStart(data.state);
+                break;
+            case 'LEVEL_UP_OPTIONS':
+                if (this.onLevelUp) this.onLevelUp(data.options);
+                break;
+            case 'GAME_OVER':
+                if (this.onGameOver) this.onGameOver(data);
+                break;
+            case 'PONG':
+                // Handle ping response
+                break;
+        }
+    }
+
+    sendInput(keys, angle, click) {
+        const now = Date.now();
+        if (now - this.lastInputTime < 1000 / CONFIG.MAX_INPUT_RATE) return;
+
+        this.lastInputTime = now;
+        if (this.conn && this.conn.open) {
+            this.conn.send({
+                type: 'INPUT',
+                keys: keys,
+                angle: angle,
+                click: click
+            });
+        }
+    }
+
+    broadcastState(gameState) {
+        this.syncCounter++;
+
+        // Send full state every N frames, otherwise send delta
+        const fullSync = this.syncCounter % CONFIG.STATE_SYNC_RATE === 0;
+
+        const message = {
+            type: 'UPDATE',
+            state: gameState.serialize(),
+            full: fullSync
+        };
+
+        this.broadcast(message);
+    }
+
+    broadcast(message) {
+        this.connections.forEach(c => {
+            if (c.open) {
+                try {
+                    c.send(message);
+                } catch (e) {
+                    console.error('Broadcast error:', e);
+                }
+            }
+        });
+    }
+
+    sendTo(peerId, message) {
+        const conn = this.connections.find(c => c.peer === peerId);
+        if (conn && conn.open) {
+            try {
+                conn.send(message);
+            } catch (e) {
+                console.error('Send error:', e);
+            }
+        }
+    }
+
+    startConnectionMonitoring() {
+        this.connectionCheckInterval = setInterval(() => {
+            if (this.isHost) {
+                // Clean up dead connections
+                this.connections = this.connections.filter(c => c.open);
+            } else {
+                // Check if still connected to host
+                if (this.conn && !this.conn.open) {
+                    this.showGameOver('Lost connection to host', 0, 0);
+                }
+            }
+        }, CONFIG.PING_INTERVAL);
+    }
+
+    showGameOver(reason, score, wave) {
+        if (this.onGameOver) {
+            this.onGameOver({ reason, score, wave });
+        }
+    }
+
+    destroy() {
+        if (this.connectionCheckInterval) {
+            clearInterval(this.connectionCheckInterval);
+        }
+
+        this.connections.forEach(c => c.close());
+        if (this.conn) this.conn.close();
+        if (this.peer) this.peer.destroy();
+    }
+}
+
+// ==========================================
+// GAME ENGINE
+// ==========================================
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.width = CONFIG.CANVAS_WIDTH;
+        this.height = CONFIG.CANVAS_HEIGHT;
+
+        this.audio = new AudioManager();
+        this.gameState = new GameState();
+        this.network = null;
+        this.isHost = false;
+        this.myId = null;
+        this.gameRunning = false;
+        this.myPendingUpgrade = false;
+
+        this.keys = {};
+        this.mouse = { x: this.width / 2, y: this.height / 2, down: false };
+
+        this.spatialGrid = new SpatialGrid(this.width, this.height, CONFIG.GRID_CELL_SIZE);
+
+        this.lastTime = 0;
+        this.deltaTime = 0;
+
+        this.upgrades = [
+            { id: 'dmg', title: 'Heavy Caliber', desc: '+25% Bullet Damage' },
+            { id: 'rate', title: 'Auto-Loader', desc: '+20% Fire Rate' },
+            { id: 'speed', title: 'Plasma Thrusters', desc: '+15% Movement Speed' },
+            { id: 'hp', title: 'Reactive Armor', desc: '+30% Max Health + Full Heal' },
+            { id: 'bulletSpeed', title: 'Mag Accelerator', desc: '+30% Bullet Velocity' }
+        ];
+
+        this.init();
+    }
+
+    init() {
+        this.resize();
+        this.setupEventListeners();
+        this.setupUI();
+    }
+
+    resize() {
+        this.width = this.canvas.width = window.innerWidth;
+        this.height = this.canvas.height = window.innerHeight;
+        CONFIG.CANVAS_WIDTH = this.width;
+        CONFIG.CANVAS_HEIGHT = this.height;
+        this.spatialGrid = new SpatialGrid(this.width, this.height, CONFIG.GRID_CELL_SIZE);
+    }
+
+    setupEventListeners() {
+        window.addEventListener('resize', () => this.resize());
+
+        window.addEventListener('keydown', (e) => {
+            if (!this.myPendingUpgrade && this.gameRunning) {
+                this.keys[e.key.toLowerCase()] = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            this.keys[e.key.toLowerCase()] = false;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            this.mouse.x = e.clientX;
+            this.mouse.y = e.clientY;
+        });
+
+        window.addEventListener('mousedown', () => {
+            if (!this.myPendingUpgrade && this.gameRunning) {
+                this.mouse.down = true;
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.mouse.down = false;
+        });
+
+        // Touch support
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (!this.myPendingUpgrade && this.gameRunning) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                this.mouse.x = touch.clientX;
+                this.mouse.y = touch.clientY;
+                this.mouse.down = true;
+                this.keys['w'] = true;
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this.mouse.x = touch.clientX;
+            this.mouse.y = touch.clientY;
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', () => {
+            this.mouse.down = false;
+            this.keys['w'] = false;
+        });
+    }
+
+    setupUI() {
+        document.getElementById('btnHost').onclick = () => this.hostGame();
+        document.getElementById('btnJoin').onclick = () => this.joinGame();
+        document.getElementById('btnStart').onclick = () => this.startGame();
+        document.getElementById('btnRestart').onclick = () => location.reload();
+
+        // Copy ID on click
+        document.getElementById('id-display').onclick = function() {
+            const text = this.textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.textContent = 'COPIED!';
+                    setTimeout(() => this.textContent = text, 1000);
+                });
+            }
+        };
+    }
+
+    showScreen(id) {
+        ['main-menu', 'lobby', 'top-hud', 'core-health-container', 'game-over-screen']
+            .forEach(el => document.getElementById(el).classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    async hostGame() {
+        this.isHost = true;
+        this.network = new NetworkManager(true);
+
+        try {
+            document.getElementById('status-msg').textContent = 'Initializing quantum node...';
+            this.showScreen('lobby');
+
+            const id = await this.network.init();
+            this.myId = id;
+
+            document.getElementById('status-msg').textContent = 'Node established. Waiting for units.';
+            document.getElementById('host-info').classList.remove('hidden');
+            document.getElementById('id-display').textContent = id;
+            document.getElementById('btnStart').classList.remove('hidden');
+
+            this.gameState.players[this.myId] = this.createPlayer(this.myId, 0);
+            this.updateLobbyCount();
+
+            this.network.onPlayerJoin = (peerId) => {
+                this.gameState.players[peerId] = this.createPlayer(peerId, Object.keys(this.gameState.players).length - 1);
+                this.updateLobbyCount();
+                this.network.broadcast({ type: 'LOBBY_UPDATE', count: Object.keys(this.gameState.players).length });
+            };
+
+            this.network.onPlayerLeave = (peerId) => {
+                delete this.gameState.players[peerId];
+                this.updateLobbyCount();
+                this.network.broadcast({ type: 'LOBBY_UPDATE', count: Object.keys(this.gameState.players).length });
+            };
+
+            this.network.onStateUpdate = (playerId, input) => {
+                const player = this.gameState.players[playerId];
+                if (player) {
+                    player.keys = input.keys;
+                    player.aimAngle = input.angle;
+                    player.isShooting = input.click;
+                }
+            };
+
+            this.network.onLevelUp = (playerId, upgradeId) => {
+                this.handleUpgradePick(playerId, upgradeId);
+            };
+
+        } catch (err) {
+            alert('Failed to create host: ' + err.message);
+            location.reload();
+        }
+    }
+
+    async joinGame() {
+        const hostId = document.getElementById('joinInput').value.trim();
+        if (!hostId) return;
+
+        this.isHost = false;
+        this.network = new NetworkManager(false);
+
+        try {
+            document.getElementById('status-msg').textContent = 'Connecting to host...';
+            this.showScreen('lobby');
+
+            const id = await this.network.init();
+            this.myId = id;
+
+            await this.network.connectToHost(hostId);
+
+            document.getElementById('status-msg').textContent = 'Connected successfully!';
+            document.getElementById('client-wait').classList.remove('hidden');
+
+            this.network.onStateUpdate = (state) => {
+                this.gameState.deserialize(state);
+                if (!this.gameRunning) {
+                    this.startGameUI();
+                    this.gameRunning = true;
+                    requestAnimationFrame((t) => this.gameLoopClient(t));
+                }
+            };
+
+            this.network.onPlayerJoin = (count) => {
+                document.getElementById('players-count').textContent = `Players ready: ${count}`;
+            };
+
+            this.network.onLevelUp = (options) => {
+                this.showLevelUpMenu(options);
+            };
+
+            this.network.onGameOver = (data) => {
+                this.showGameOverScreen(data.score, data.wave);
+            };
+
+        } catch (err) {
+            alert('Failed to connect: ' + err.message);
+            location.reload();
+        }
+    }
+
+    updateLobbyCount() {
+        const count = Object.keys(this.gameState.players).length;
+        document.getElementById('players-count').textContent = `Players ready: ${count}`;
+    }
+
+    startGame() {
+        if (!this.isHost || this.gameRunning) return;
+
+        this.gameRunning = true;
+        this.spawnObstacles();
+
+        this.network.broadcast({ type: 'START_GAME', state: this.gameState.serialize() });
+        this.startGameUI();
+
+        requestAnimationFrame((t) => this.gameLoopHost(t));
+    }
+
+    startGameUI() {
+        this.showScreen('top-hud');
+        document.getElementById('core-health-container').classList.remove('hidden');
+    }
+
+    createPlayer(id, colorIndex) {
+        const angle = (colorIndex * Math.PI * 2) / 4;
+        const dist = 100;
+
+        return {
+            id: id,
+            shortId: id.substring(0, 4).toUpperCase(),
+            x: this.width / 2 + Math.cos(angle) * dist,
+            y: this.height / 2 + Math.sin(angle) * dist,
+            angle: 0,
+            aimAngle: 0,
+            color: PLAYER_COLORS[colorIndex % PLAYER_COLORS.length],
+            hp: CONFIG.PLAYER_HP,
+            maxHp: CONFIG.PLAYER_HP,
+            exp: 0,
+            level: 1,
+            expToNext: CONFIG.INITIAL_EXP_REQUIRED,
+            speed: CONFIG.PLAYER_SPEED,
+            fireRate: CONFIG.PLAYER_FIRE_RATE,
+            damage: CONFIG.PLAYER_DAMAGE,
+            bulletSpeed: CONFIG.PLAYER_BULLET_SPEED,
+            cooldown: 0,
+            keys: {},
+            isShooting: false,
+            needsUpgrade: false,
+            respawnTimer: 0
+        };
+    }
+
+    spawnObstacles() {
+        this.gameState.obstacles = [];
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+
+        for (let i = 0; i < CONFIG.OBSTACLE_COUNT; i++) {
+            const size = CONFIG.OBSTACLE_MIN_SIZE + Math.random() * (CONFIG.OBSTACLE_MAX_SIZE - CONFIG.OBSTACLE_MIN_SIZE);
+            let x, y;
+            let attempts = 0;
+
+            do {
+                x = Math.random() * (this.width - size);
+                y = Math.random() * (this.height - size);
+                attempts++;
+            } while (
+                Math.hypot(x + size / 2 - centerX, y + size / 2 - centerY) < CONFIG.OBSTACLE_SAFE_DISTANCE &&
+                attempts < 100
+            );
+
+            this.gameState.obstacles.push({
+                x: x,
+                y: y,
+                w: size,
+                h: size,
+                hp: CONFIG.OBSTACLE_HP,
+                maxHp: CONFIG.OBSTACLE_HP
+            });
+        }
+    }
+
+    gameLoopHost(time) {
+        if (!this.gameRunning) return;
+
+        this.deltaTime = time - this.lastTime;
+        this.lastTime = time;
+
+        if (this.gameState.coreHealth <= 0) {
+            this.endGame();
+            return;
+        }
+
+        this.gameState.gameTime++;
+
+        // Apply local player input
+        if (this.gameState.players[this.myId] && !this.myPendingUpgrade) {
+            const player = this.gameState.players[this.myId];
+            player.keys = { ...this.keys };
+            player.aimAngle = Math.atan2(this.mouse.y - player.y, this.mouse.x - player.x);
+            player.isShooting = this.mouse.down;
+        }
+
+        // Spawn enemies
+        const spawnChance = CONFIG.ENEMY_SPAWN_BASE + (this.gameState.wave * CONFIG.ENEMY_SPAWN_SCALE);
+        if (Math.random() < spawnChance) {
+            this.spawnEnemy();
+        }
+
+        // Update
+        this.updatePlayers();
+        this.updateBullets(this.gameState.bullets, true);
+        this.updateBullets(this.gameState.enemyBullets, false);
+        this.updateEnemies();
+        this.updateMines();
+        this.updatePickups();
+
+        // Network sync
+        this.network.broadcastState(this.gameState);
+
+        // Render
+        this.render();
+        this.updateHUD();
+
+        requestAnimationFrame((t) => this.gameLoopHost(t));
+    }
+
+    gameLoopClient(time) {
+        if (!this.gameRunning) return;
+
+        this.deltaTime = time - this.lastTime;
+        this.lastTime = time;
+
+        // Send input
+        if (!this.myPendingUpgrade) {
+            const aimAngle = Math.atan2(
+                this.mouse.y - this.height / 2,
+                this.mouse.x - this.width / 2
+            );
+            this.network.sendInput(this.keys, aimAngle, this.mouse.down);
+        }
+
+        // Render
+        this.render();
+        this.updateHUD();
+
+        requestAnimationFrame((t) => this.gameLoopClient(t));
+    }
+
+    updatePlayers() {
+        for (const id in this.gameState.players) {
+            const p = this.gameState.players[id];
+
+            // Respawn
+            if (p.hp <= 0) {
+                p.respawnTimer--;
+                if (p.respawnTimer <= 0) {
+                    p.hp = p.maxHp;
+                    p.x = this.width / 2;
+                    p.y = this.height / 2;
+                }
+                continue;
+            }
+
+            // Movement
+            let dx = 0, dy = 0;
+            if (p.keys['w'] || p.keys['arrowup']) dy -= 1;
+            if (p.keys['s'] || p.keys['arrowdown']) dy += 1;
+            if (p.keys['a'] || p.keys['arrowleft']) dx -= 1;
+            if (p.keys['d'] || p.keys['arrowright']) dx += 1;
+
+            if (dx !== 0 || dy !== 0) {
+                const moveAngle = Math.atan2(dy, dx);
+                const newX = p.x + Math.cos(moveAngle) * p.speed;
+                const newY = p.y + Math.sin(moveAngle) * p.speed;
+
+                // Check obstacle collisions
+                let collision = false;
+                for (const obs of this.gameState.obstacles) {
+                    if (newX > obs.x && newX < obs.x + obs.w &&
+                        newY > obs.y && newY < obs.y + obs.h) {
+                        collision = true;
+                        break;
+                    }
+                }
+
+                if (!collision) {
+                    p.x = newX;
+                    p.y = newY;
+                    p.angle = moveAngle;
+                }
+            }
+
+            // Clamp to screen
+            p.x = Math.max(CONFIG.PLAYER_SIZE, Math.min(this.width - CONFIG.PLAYER_SIZE, p.x));
+            p.y = Math.max(CONFIG.PLAYER_SIZE, Math.min(this.height - CONFIG.PLAYER_SIZE, p.y));
+
+            // Shooting
+            if (p.isShooting && p.cooldown <= 0 && !p.needsUpgrade) {
+                this.gameState.bullets.push({
+                    x: p.x + Math.cos(p.aimAngle) * 20,
+                    y: p.y + Math.sin(p.aimAngle) * 20,
+                    vx: Math.cos(p.aimAngle) * p.bulletSpeed,
+                    vy: Math.sin(p.aimAngle) * p.bulletSpeed,
+                    dmg: p.damage,
+                    color: p.color,
+                    life: CONFIG.BULLET_LIFETIME
+                });
+                p.cooldown = p.fireRate;
+                this.audio.play('shoot');
+            }
+
+            if (p.cooldown > 0) p.cooldown--;
+        }
+    }
+
+    updateBullets(bullets, isPlayerBullet) {
+        this.spatialGrid.clear();
+
+        // Build spatial grid
+        if (isPlayerBullet) {
+            for (const enemy of this.gameState.enemies) {
+                this.spatialGrid.insert(enemy, enemy.x, enemy.y);
+            }
+        } else {
+            for (const id in this.gameState.players) {
+                const p = this.gameState.players[id];
+                if (p.hp > 0) {
+                    this.spatialGrid.insert(p, p.x, p.y);
+                }
+            }
+        }
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const b = bullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+            b.life--;
+
+            if (b.life <= 0 || b.x < -50 || b.x > this.width + 50 ||
+                b.y < -50 || b.y > this.height + 50) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            let hit = false;
+
+            if (isPlayerBullet) {
+                // Check enemy hits using spatial grid
+                const nearby = this.spatialGrid.query(b.x, b.y, CONFIG.ENEMY_COLLISION_RADIUS);
+                for (const enemy of nearby) {
+                    if (Math.hypot(enemy.x - b.x, enemy.y - b.y) < CONFIG.ENEMY_COLLISION_RADIUS) {
+                        this.damageEnemy(enemy);
+                        hit = true;
+                        break;
+                    }
+                }
+
+                // Check obstacle hits
+                if (!hit) {
+                    for (let k = this.gameState.obstacles.length - 1; k >= 0; k--) {
+                        const obs = this.gameState.obstacles[k];
+                        if (b.x > obs.x && b.x < obs.x + obs.w &&
+                            b.y > obs.y && b.y < obs.y + obs.h) {
+                            obs.hp -= b.dmg;
+                            if (obs.hp <= 0) {
+                                this.gameState.obstacles.splice(k, 1);
+                            }
+                            hit = true;
+                            this.audio.play('hit');
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Check player hits
+                const nearby = this.spatialGrid.query(b.x, b.y, CONFIG.PLAYER_COLLISION_RADIUS);
+                for (const player of nearby) {
+                    if (Math.hypot(player.x - b.x, player.y - b.y) < CONFIG.PLAYER_COLLISION_RADIUS) {
+                        this.damagePlayer(player, b.dmg);
+                        hit = true;
+                        break;
+                    }
+                }
+
+                // Check core hit
+                if (!hit) {
+                    const centerX = this.width / 2;
+                    const centerY = this.height / 2;
+                    if (Math.hypot(centerX - b.x, centerY - b.y) < CONFIG.CORE_COLLISION_RADIUS) {
+                        this.gameState.coreHealth -= b.dmg;
+                        hit = true;
+                        this.audio.play('explode');
+                    }
+                }
+            }
+
+            if (hit) {
+                bullets.splice(i, 1);
+            }
+        }
+    }
+
+    updateEnemies() {
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+
+        for (let i = this.gameState.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.gameState.enemies[i];
+            const dx = centerX - enemy.x;
+            const dy = centerY - enemy.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            enemy.angle = Math.atan2(dy, dx);
+
+            // Movement based on type
+            if (enemy.type === 'chaser' || enemy.type === 'bomber') {
+                enemy.x += Math.cos(enemy.angle) * enemy.speed;
+                enemy.y += Math.sin(enemy.angle) * enemy.speed;
+            } else if (enemy.type === 'shooter') {
+                if (dist > 300) {
+                    enemy.x += Math.cos(enemy.angle) * enemy.speed;
+                    enemy.y += Math.sin(enemy.angle) * enemy.speed;
+                }
+
+                if (enemy.cooldown <= 0) {
+                    // Find nearest player
+                    let nearest = null;
+                    let minDist = 500;
+
+                    for (const id in this.gameState.players) {
+                        const p = this.gameState.players[id];
+                        if (p.hp <= 0) continue;
+                        const d = Math.hypot(p.x - enemy.x, p.y - enemy.y);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearest = p;
+                        }
+                    }
+
+                    if (nearest) {
+                        const aim = Math.atan2(nearest.y - enemy.y, nearest.x - enemy.x);
+                        this.gameState.enemyBullets.push({
+                            x: enemy.x,
+                            y: enemy.y,
+                            vx: Math.cos(aim) * CONFIG.ENEMY_BULLET_SPEED,
+                            vy: Math.sin(aim) * CONFIG.ENEMY_BULLET_SPEED,
+                            dmg: CONFIG.ENEMY_BULLET_DAMAGE,
+                            life: CONFIG.BULLET_LIFETIME,
+                            color: enemy.color
+                        });
+                        enemy.cooldown = 150;
+                        this.audio.play('enemyShoot');
+                    }
+                }
+
+                if (enemy.cooldown > 0) enemy.cooldown--;
+            }
+
+            // Check core collision
+            if (dist < CONFIG.CORE_COLLISION_RADIUS + CONFIG.ENEMY_COLLISION_RADIUS) {
+                const damage = enemy.type === 'bomber' ? 50 : 20;
+                this.gameState.coreHealth -= damage;
+                this.audio.play('explode');
+                this.killEnemy(enemy, i, false);
+            }
+        }
+    }
+
+    updateMines() {
+        for (let i = this.gameState.mines.length - 1; i >= 0; i--) {
+            const mine = this.gameState.mines[i];
+            mine.timer--;
+
+            if (mine.timer <= 0) {
+                this.audio.play('explode');
+
+                // Damage enemies
+                for (let j = this.gameState.enemies.length - 1; j >= 0; j--) {
+                    const enemy = this.gameState.enemies[j];
+                    if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) < mine.radius) {
+                        enemy.hp -= mine.dmg;
+                        if (enemy.hp <= 0) {
+                            this.killEnemy(enemy, j, true);
+                        }
+                    }
+                }
+
+                // Damage players
+                for (const id in this.gameState.players) {
+                    const p = this.gameState.players[id];
+                    if (p.hp > 0 && Math.hypot(p.x - mine.x, p.y - mine.y) < mine.radius) {
+                        this.damagePlayer(p, mine.dmg / 2);
+                    }
+                }
+
+                this.gameState.mines.splice(i, 1);
+            }
+        }
+    }
+
+    updatePickups() {
+        for (const id in this.gameState.players) {
+            const p = this.gameState.players[id];
+            if (p.hp <= 0) continue;
+
+            for (let i = this.gameState.pickups.length - 1; i >= 0; i--) {
+                const pickup = this.gameState.pickups[i];
+                if (Math.hypot(p.x - pickup.x, p.y - pickup.y) < CONFIG.PICKUP_RADIUS) {
+                    p.exp += pickup.val;
+                    this.gameState.pickups.splice(i, 1);
+                    this.audio.play('collect');
+                    this.checkLevelUp(p);
+                }
+            }
+        }
+    }
+
+    spawnEnemy() {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.max(this.width, this.height) / 1.3;
+        const x = this.width / 2 + Math.cos(angle) * dist;
+        const y = this.height / 2 + Math.sin(angle) * dist;
+
+        let type = 'chaser';
+        let hp = CONFIG.ENEMY_CHASER_HP;
+        let speed = 2.5;
+        let color = COLORS.RED;
+
+        const roll = Math.random();
+        if (this.gameState.wave > 2 && roll > 0.7) {
+            type = 'shooter';
+            hp = CONFIG.ENEMY_SHOOTER_HP;
+            speed = 1.5;
+            color = COLORS.YELLOW;
+        } else if (this.gameState.wave > 4 && roll > 0.85) {
+            type = 'bomber';
+            hp = CONFIG.ENEMY_BOMBER_HP;
+            speed = 1;
+            color = COLORS.PINK;
+        }
+
+        hp *= (1 + this.gameState.wave * 0.15);
+        speed *= (1 + this.gameState.wave * 0.05);
+
+        this.gameState.enemies.push({
+            x: x,
+            y: y,
+            type: type,
+            hp: hp,
+            maxHp: hp,
+            speed: speed,
+            color: color,
+            angle: 0,
+            cooldown: 100 + Math.random() * 100
+        });
+    }
+
+    damageEnemy(enemy) {
+        enemy.hp -= this.gameState.players[this.myId]?.damage || CONFIG.PLAYER_DAMAGE;
+        this.audio.play('hit');
+
+        if (enemy.hp <= 0) {
+            const idx = this.gameState.enemies.indexOf(enemy);
+            if (idx !== -1) {
+                this.killEnemy(enemy, idx, true);
+            }
+        }
+    }
+
+    killEnemy(enemy, index, dropExp) {
+        if (dropExp) {
+            const scoreValue = enemy.type === 'bomber' ? 30 : 10;
+            this.gameState.score += scoreValue;
+
+            const expValue = enemy.type === 'bomber' ? CONFIG.PICKUP_EXP_BOMBER :
+                             enemy.type === 'shooter' ? CONFIG.PICKUP_EXP_SHOOTER :
+                             CONFIG.PICKUP_EXP_BASE;
+
+            this.gameState.pickups.push({
+                x: enemy.x,
+                y: enemy.y,
+                val: expValue
+            });
+
+            if (enemy.type === 'bomber') {
+                this.gameState.mines.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    timer: CONFIG.MINE_TIMER,
+                    radius: CONFIG.MINE_RADIUS,
+                    dmg: CONFIG.MINE_DAMAGE
+                });
+            }
+
+            this.audio.play('explode');
+
+            // Wave progression
+            if (this.gameState.score % CONFIG.SCORE_PER_WAVE === 0) {
+                this.gameState.wave++;
+            }
+        }
+
+        this.gameState.enemies.splice(index, 1);
+    }
+
+    damagePlayer(player, damage) {
+        player.hp = Math.max(0, player.hp - damage);
+        this.audio.play('hit');
+
+        if (player.hp <= 0) {
+            this.gameState.score = Math.max(0, this.gameState.score - 50);
+            player.respawnTimer = CONFIG.PLAYER_RESPAWN_TIME / 16.67; // Convert ms to frames
+            this.audio.play('explode');
+        }
+    }
+
+    checkLevelUp(player) {
+        if (player.exp >= player.expToNext) {
+            player.level++;
+            player.exp -= player.expToNext;
+            player.expToNext = Math.floor(player.expToNext * CONFIG.EXP_SCALE);
+            player.needsUpgrade = true;
+
+            const options = [...this.upgrades]
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 3)
+                .map(u => u.id);
+
+            if (player.id === this.myId) {
+                this.showLevelUpMenu(options);
+            } else {
+                this.network.sendTo(player.id, {
+                    type: 'LEVEL_UP_OPTIONS',
+                    options: options
+                });
+            }
+        }
+    }
+
+    showLevelUpMenu(options) {
+        const container = document.getElementById('upgrade-container');
+        container.innerHTML = '';
+        this.myPendingUpgrade = true;
+
+        // Reset input
+        this.keys = {};
+        this.mouse.down = false;
+
+        options.forEach(optId => {
+            const upgrade = this.upgrades.find(u => u.id === optId);
+            const card = document.createElement('div');
+            card.className = 'upgrade-card';
+
+            const title = document.createElement('span');
+            title.className = 'upgrade-title';
+            title.textContent = upgrade.title;
+
+            const desc = document.createElement('span');
+            desc.className = 'upgrade-desc';
+            desc.textContent = upgrade.desc;
+
+            card.appendChild(title);
+            card.appendChild(desc);
+
+            card.onclick = () => {
+                document.getElementById('levelup-overlay').classList.add('hidden');
+                this.myPendingUpgrade = false;
+
+                if (this.isHost) {
+                    this.handleUpgradePick(this.myId, optId);
+                } else {
+                    this.network.conn.send({
+                        type: 'PICK_UPGRADE',
+                        upgradeId: optId
+                    });
+                }
+            };
+
+            container.appendChild(card);
+        });
+
+        document.getElementById('levelup-overlay').classList.remove('hidden');
+        this.audio.play('levelup');
+    }
+
+    handleUpgradePick(playerId, upgradeId) {
+        const player = this.gameState.players[playerId];
+        if (!player) return;
+
+        switch (upgradeId) {
+            case 'dmg':
+                player.damage *= 1.25;
+                break;
+            case 'rate':
+                player.fireRate = Math.max(5, player.fireRate * 0.8);
+                break;
+            case 'speed':
+                player.speed *= 1.15;
+                break;
+            case 'hp':
+                player.maxHp *= 1.3;
+                player.hp = player.maxHp;
+                break;
+            case 'bulletSpeed':
+                player.bulletSpeed *= 1.3;
+                break;
+        }
+
+        player.needsUpgrade = false;
+
+        if (playerId === this.myId) {
+            this.myPendingUpgrade = false;
+            document.getElementById('levelup-overlay').classList.add('hidden');
+        }
+    }
+
+    updateHUD() {
+        document.getElementById('wave-info').textContent = `WAVE: ${this.gameState.wave}`;
+        document.getElementById('score-info').textContent = `SCORE: ${this.gameState.score}`;
+
+        const hpPercent = Math.max(0, (this.gameState.coreHealth / this.gameState.maxCoreHealth) * 100);
+        const fill = document.getElementById('core-health-fill');
+        fill.style.width = hpPercent + '%';
+
+        if (hpPercent > 50) {
+            fill.style.background = 'linear-gradient(90deg, var(--neon-blue), #fff)';
+        } else if (hpPercent > 25) {
+            fill.style.background = 'linear-gradient(90deg, var(--neon-yellow), #fff)';
+        } else {
+            fill.style.background = 'linear-gradient(90deg, var(--neon-red), #fff)';
+        }
+    }
+
+    render() {
+        // Clear
+        this.ctx.fillStyle = '#020202';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+
+        // Obstacles
+        this.ctx.shadowBlur = 15;
+        this.gameState.obstacles.forEach(obs => {
+            this.ctx.shadowColor = COLORS.BLUE;
+            this.ctx.strokeStyle = COLORS.BLUE;
+            this.ctx.lineWidth = 2;
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+            this.ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            this.ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        });
+
+        // Mines
+        this.gameState.mines.forEach(mine => {
+            this.ctx.shadowColor = COLORS.PINK;
+            this.ctx.fillStyle = COLORS.PINK;
+            this.ctx.beginPath();
+            this.ctx.arc(mine.x, mine.y, 10 + Math.sin(this.gameState.gameTime / 5) * 5, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+            this.ctx.beginPath();
+            this.ctx.arc(mine.x, mine.y, mine.radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+        });
+
+        // Pickups
+        this.ctx.shadowBlur = 10;
+        this.gameState.pickups.forEach(pickup => {
+            this.ctx.shadowColor = COLORS.GREEN;
+            this.ctx.fillStyle = COLORS.GREEN;
+            this.ctx.beginPath();
+            this.ctx.arc(pickup.x, pickup.y, 8, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        // Core
+        this.ctx.shadowBlur = 30;
+        this.ctx.shadowColor = COLORS.BLUE;
+        this.ctx.fillStyle = '#fff';
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, CONFIG.CORE_RADIUS + Math.sin(this.gameState.gameTime / 30) * 5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = COLORS.BLUE;
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        // Enemies
+        this.gameState.enemies.forEach(enemy => {
+            this.ctx.shadowColor = enemy.color;
+            this.ctx.fillStyle = enemy.color;
+            this.ctx.strokeStyle = enemy.color;
+            this.ctx.save();
+            this.ctx.translate(enemy.x, enemy.y);
+            this.ctx.rotate(enemy.angle);
+
+            if (enemy.type === 'chaser') {
+                this.ctx.beginPath();
+                this.ctx.moveTo(20, 0);
+                this.ctx.lineTo(-15, 15);
+                this.ctx.lineTo(-5, 0);
+                this.ctx.lineTo(-15, -15);
+                this.ctx.fill();
+            } else if (enemy.type === 'shooter') {
+                this.ctx.beginPath();
+                this.ctx.moveTo(20, 0);
+                this.ctx.lineTo(0, 20);
+                this.ctx.lineTo(-20, 0);
+                this.ctx.lineTo(0, -20);
+                this.ctx.closePath();
+                this.ctx.stroke();
+                this.ctx.fill();
+            } else if (enemy.type === 'bomber') {
+                this.ctx.lineWidth = 5;
+                this.ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    this.ctx.lineTo(
+                        25 * Math.cos(i * Math.PI / 3),
+                        25 * Math.sin(i * Math.PI / 3)
+                    );
+                }
+                this.ctx.closePath();
+                this.ctx.stroke();
+            }
+
+            this.ctx.restore();
+            this.drawBar(enemy.x - 20, enemy.y - 35, 40, 4, enemy.hp, enemy.maxHp, enemy.color);
+        });
+
+        // Players
+        for (const id in this.gameState.players) {
+            const p = this.gameState.players[id];
+
+            if (p.hp <= 0) {
+                // Show respawn indicator
+                this.ctx.shadowBlur = 20;
+                this.ctx.shadowColor = p.color;
+                this.ctx.fillStyle = p.color;
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, 60, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.globalAlpha = 1;
+                continue;
+            }
+
+            this.ctx.shadowColor = p.color;
+            this.ctx.strokeStyle = p.color;
+            this.ctx.fillStyle = p.color;
+            this.ctx.lineWidth = 2;
+
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+
+            // Name and level
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillStyle = p.color;
+            this.ctx.textAlign = 'center';
+            this.ctx.font = "bold 14px 'Courier New'";
+            this.ctx.fillText(`[LV.${p.level}] ${p.shortId}`, 0, -45);
+
+            // Health bar
+            this.drawBar(-25, -35, 50, 6, p.hp, p.maxHp, p.color);
+
+            // XP bar
+            this.drawBar(-25, -28, 50, 3, p.exp, p.expToNext, COLORS.YELLOW);
+
+            // Body
+            this.ctx.save();
+            this.ctx.rotate(p.angle);
+            this.ctx.shadowBlur = 15;
+            this.ctx.strokeRect(-18, -15, 36, 30);
+            this.ctx.restore();
+
+            // Turret
+            this.ctx.save();
+            this.ctx.rotate(p.aimAngle);
+            this.ctx.fillRect(0, -6, 28, 12);
+            this.ctx.strokeRect(-12, -12, 24, 24);
+            this.ctx.restore();
+
+            this.ctx.restore();
+        }
+
+        // Bullets
+        this.ctx.shadowBlur = 10;
+        [...this.gameState.bullets, ...this.gameState.enemyBullets].forEach(bullet => {
+            this.ctx.shadowColor = bullet.color;
+            this.ctx.fillStyle = bullet.color;
+            this.ctx.beginPath();
+            this.ctx.ellipse(
+                bullet.x, bullet.y,
+                8, 4,
+                Math.atan2(bullet.vy, bullet.vx),
+                0, Math.PI * 2
+            );
+            this.ctx.fill();
+        });
+    }
+
+    drawBar(x, y, w, h, val, max, color) {
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = '#333';
+        this.ctx.fillRect(x, y, w, h);
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(x, y, Math.max(0, (val / max) * w), h);
+    }
+
+    showGameOverScreen(score, wave) {
+        this.gameRunning = false;
+        document.getElementById('final-score').textContent = `Final Score: ${score}`;
+        document.getElementById('final-wave').textContent = `Reached Wave: ${wave}`;
+        document.getElementById('game-over-screen').classList.remove('hidden');
+    }
+
+    endGame() {
+        this.gameRunning = false;
+        this.audio.play('explode');
+
+        if (this.isHost) {
+            this.network.broadcast({
+                type: 'GAME_OVER',
+                score: this.gameState.score,
+                wave: this.gameState.wave
+            });
+        }
+
+        this.showGameOverScreen(this.gameState.score, this.gameState.wave);
+
+        if (this.network) {
+            this.network.destroy();
+        }
+    }
+}
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+window.addEventListener('load', () => {
+    const game = new Game();
+});
+</script>
+
+</body>
+</html>

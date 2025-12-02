@@ -1,0 +1,12 @@
+{
+  "name": "neon-core-overdrive",
+  "version": "1.0.0",
+  "description": "Production-ready co-op defense game with P2P multiplayer",
+  "main": "neon-core-overdrive.html",
+  "scripts": {
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["game", "multiplayer", "p2p", "canvas", "javascript"],
+  "author": "",
+  "license": "MIT"
+}
