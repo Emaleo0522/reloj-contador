@@ -15,10 +15,15 @@
 
 ## 🎮 Game Features
 
+### Dual Game Modes
+- **PvE: CO-OP Mode** - Defend the core cooperatively against enemy waves
+- **PvP: DEATHMATCH Mode** - Player vs Player combat (first to 20 kills wins)
+
+### Core Features
 - **Real-time P2P Multiplayer** using PeerJS
-- **Cooperative Defense** gameplay
-- **Progressive Difficulty** with wave system
+- **Progressive Difficulty** with wave system (PvE)
 - **RPG Elements** with leveling and upgrades
+- **Power-up System** with tactical pickups (PvP)
 - **Optimized Networking** with delta updates
 - **Mobile Support** with touch controls
 - **No External Dependencies** (except PeerJS CDN)

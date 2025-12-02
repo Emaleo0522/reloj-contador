@@ -1,6 +1,25 @@
 # Changelog - Production Refactor
 
-## 🔥 Major Improvements
+## 🎮 v2.0 - PvP Mode Added (Latest)
+
+### New Features
+- ✅ **Dual Game Modes** - Choose between PvE (Co-op) and PvP (Deathmatch)
+- ✅ **PvP Deathmatch** - Player vs Player combat, first to 20 kills wins
+- ✅ **Power-up System** - Tactical pickups spawn on map in PvP mode
+- ✅ **PvP HUD** - Real-time kill scoreboard
+- ✅ **Copy-to-Clipboard** - Click room ID to copy instantly
+- ✅ **Mode Selection UI** - Choose your battle mode before hosting
+
+### Technical Improvements
+- Audio node pooling (max 20 concurrent sounds)
+- Enhanced UI/UX with mode selector
+- Player damage system for PvP
+- Respawn mechanics for PvP mode
+- Win condition detection (20 kills)
+
+---
+
+## 🔥 v1.0 - Major Production Refactor
 
 ### Architecture (Complete Rewrite)
 - ✅ Migrated from procedural to **OOP class-based architecture**
